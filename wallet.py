@@ -27,14 +27,12 @@ def signTransaction(transaction, d_key, n_key):
         hash = int.from_bytes(sha256(json.dumps(transaction).encode("utf-8")).digest(), byteorder='big')
         return pow(hash, d_key, n_key), hash
 
-class Transaction():
-    def __init__(self, sender, receiver, amount, timestamp, ledger, fee):
+class EmptyTransaction():#this is to be used when a transaction class is being instantiated by someome other than the sender wallet
+    def __init__(self, info, ledger):
+        self.info = info
+        self.signature = None
+        self.hash = None
         self.ledger = ledger
-        senderKey = sender.getPublic()
-        receiverKey = receiver.getPublic()
-        self.info = {"sender":senderKey, "receiver":receiverKey, "amount":amount, "timestamp":timestamp, "fee":fee}
-        self.signature, self.hash = sender.signTransaction(self.info)
-
     #Prevents a sender from spending more money than they have
     #Prevents a transaction from being faked - Done
     def verify_transaction(self):
@@ -53,6 +51,14 @@ class Transaction():
         return self.info
     def getSignature(self):
         return self.signature
+class Transaction(EmptyTransaction):
+    def __init__(self, sender, receiver, amount, timestamp, ledger, fee):
+        super(Transaction, self).__init__(None, ledger)
+        senderKey = sender.getPublic()
+        receiverKey = receiver.getPublic()
+        self.info = {"sender":senderKey, "receiver":receiverKey, "amount":amount, "timestamp":timestamp, "fee":fee}
+        self.signature, self.hash = sender.signTransaction(self.info)
+
 
 if __name__ == "__main__":
     user1 = Wallet()
