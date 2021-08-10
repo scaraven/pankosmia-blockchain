@@ -22,20 +22,17 @@ if __name__ == "__main__":
 class P2PNode(BasicNode):
     """This class builds upon the BasicNode class and is specialised to perform any task that a node can perform including receiving and verifying blocks (although this is done in the Blockchain class), Transmitting blocks and transactions.
     """
-    def __init__(self, host, port, known_host, known_port, blockchain=None, verify=False):
-        super(P2PNode, self).__init__(host, port, known_host, known_port, "NODE")
+    def __init__(self, host, port, known_host, known_port, isknown=False, blockchain=None, verify=False):
+        super(P2PNode, self).__init__(host, port, known_host, known_port, "NODE", isknown=isknown)
 
         self.blockchain = blockchain
         if verify:
             if not verifyBlockchain(self.blockchain):
                 raise ValueError("Invalid Blockchain")
+        self.startup()
     def startup(self): #run this automatically when class is initiated
         for host, port in self.known_nodes.items():
             self.getNodes(host, port)
-        if self.blockchain == None:#If we do not have a valid blockchain, then request it from another node
-            blockchain = self.requestBlockchain()
-            if blockchain is not None:
-                self.blockchain = blockchain
     def getNodes(self, host, port):
         """This visits a node, adds it to our known_nodes dict using handleHandshake,
         requests the IPList and then repeats for every node in that list"""
@@ -74,22 +71,23 @@ class P2PNode(BasicNode):
             blockchain_info = {hash:block.getBlock()  for hash, block in self.blockchain.getBlockChain().items()}
             data = {**self.protocol, "BLOCKCHAIN": b64EncodeDictionary(blockchain_info)}
             self.send_to_node(connected_node, data)
-    def loopList(function, *args):
+    def loopList(self, function, *args):
         for host, port in self.known_nodes.items():
             thread_client = self.connect_with_node(host, port)
             function(thread_client, *args)
-    def distTxn(self, connected_node, txn):
+    def distTxn(self, txn):
         if txn is not None:
             self.loopList(self.transmitTransaction, *(txn,))
-    def distBlock(self, connected_nod, block):
+    def distBlock(self, block):
         if block is not None:
+            self.blockchain.addBlock(block)
             self.loopList(self.transmitBlock, *(block,))
     def node_message(self, connected_node, data):
         super(P2PNode, self).node_message(connected_node, data)
         if self.checkProtocol(connected_node, data):
             self.respondBlockchain(connected_node, data)
-            block = self.receiveBlock(connected_node, data)
-            txn = self.receiveTransaction(connected_node, data)
+            block = self.receiveBlock(connected_node, data, self.blockchain.getBlockChain().keys())
+            txn = self.receiveTransaction(connected_node, data, self.blockchain.ledger.pool)
             self.distBlock(block)
 def b64EncodeDictionary(data):
     return base64.b64encode(json.dumps(data).encode("ascii")).decode("ascii")
@@ -98,12 +96,14 @@ def b64DecodeDictionary(data):
 
 blockchain = Blockchain()
 ledger = blockchain.ledger
-node = P2PNode(HOST, PORT, HOST, PORT, blockchain=blockchain) #The last two args should be a node which is always up
+isknown = False
+if PORT == 9001:
+    isknown = True
+node = P2PNode(HOST, PORT, '127.0.0.1', 9001, isknown=isknown, blockchain=blockchain) #The last two args should be a node which is always up
 node.start()
 if connect:
-    thread_client = node.connect_with_node(thost, tport)
-    node.handleHandshake(thread_client)
-    mineruser = wallet.Wallet(blockchain, ledger)
-    initialBlock = Block(prevHash="0"*64)
-    miner = Miner(initialBlock, mineruser, ledger)
-    node.transmitBlock(th
+    miner = Wallet(blockchain, ledger)
+    block = Block(prevHash="0"*64)
+    Miner(block, miner, ledger)
+    node.blockchain.addBlock(block)
+    node.distBlock(block)

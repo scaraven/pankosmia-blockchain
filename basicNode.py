@@ -106,12 +106,13 @@ class BasicNode(Node):
                 self.send_to_node(connected_node, validation)
                 response = self.getResponse(connected_node)
                 print("Response - {0}".format(response))
+                breakpoint()
                 block_info = b64DecodeDictionary(response["TRANSMIT_BLOCK"])
                 transaction_info = b64DecodeDictionary(response["TRANSMIT_TRANSACTIONS"])
                 block = Block()
                 block.block = block_info
                 block.transactions = transaction_info
-                if block.verifyPow() and block.verifyHeader():
+                if block.verifyPoW() and block.verifyHeader():
                     return block#return block
     def transmitTransaction(self, connected_node, transaction): #USER AND NODE
         data = {**self.protocol, "TRANSMIT_TRANSACTION": "HASH "+transaction.getSignature()}
