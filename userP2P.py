@@ -9,7 +9,7 @@ class UserP2P(BasicNode):
         super(UserP2P, self).__init__(host, port, known_host, known_port, "USER")
         self.user = userwallet
     def createTransaction(self, receiver, amount, fee):
-       transaction = P2PTransaction(self.user.getPublic(), receiver, amount, fee, self.user.signTransaction)
+        transaction = P2PTransaction(self.user.getPublic(), receiver, amount, fee, self.user.signTransaction)
         for host, port in self.known_nodes():
             thread_client = self.connect_with_node(host, port)
             self.transmitTransaction(thread_client, transaction)

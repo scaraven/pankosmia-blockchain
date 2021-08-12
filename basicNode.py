@@ -129,7 +129,7 @@ class BasicNode(Node):
         self.send_to_node(connected_node, data)
         response = self.getResponse(connected_node)
         if "TRANSMIT_TRANSACTION" in response.keys() and response["TRANSMIT_TRANSACTION"] == "NONE":
-            txn_data = {**self.protocol, "TRANSMIT_TRANSACTION": b64EncodeDictionary(transaction.info)}
+            txn_data = {**self.protocol, "INFO": b64EncodeDictionary(transaction.info), "SIGNATURE":transaction.getSignature()}
             self.send_to_node(connected_node, txn_data)
     def receiveTransaction(self, connected_node, response, pool):#MINER AND NODE
         if "TRANSMIT_TRANSACTION" in response.keys():
@@ -141,9 +141,10 @@ class BasicNode(Node):
                 validation = {**self.protocol, "TRANSMIT_TRANSACTION": "NONE"}
                 self.send_to_node(connected_node, validation)
                 response = self.getResponse(connected_node)
-                transaction_info = b64DecodeDictionary(response)
-                transaction = EmptyTransaction(transaction_info, self.blockchain.ledger)
-                if transaction.verify_signature():
+                transaction_info = b64DecodeDictionary(response["INFO"])
+                signature = response["SIGNATURE"]
+                transaction = NodeTransaction(transaction_info, signature, self.blockchain.ledger)
+                if transaction.verifySignature() and transaction.verifyHeader():
                     pool = transaction.getSignature()#add the transaction to our pool
                     return transaction
 

@@ -26,46 +26,48 @@ class Wallet():
 def signTransaction(transaction, d_key, n_key):
         hash = int.from_bytes(sha256(json.dumps(transaction).encode("utf-8")).digest(), byteorder='big')
         return pow(hash, d_key, n_key), hash
-class P2PTransaction():
-    def __init__(self, sender_key, receiver_key, amount, fee, signfunc):
-        info = {"sender": sender_key, "receiver":receiver_key, "amont":amount, "timestamp":time.time(), "fee":fee}
-        super(P2PTransaction, self).__init__(info, None)
-        self.signature, self.hash = signfunc(info)
 
-class EmptyTransaction():#this is to be used when a transaction class is being instantiated by someome other than the sender wallet
-    def __init__(self, info, ledger):
+class BaseTransaction():#this is to be used when a transaction class is being instantiated by someome other than the sender wallet
+    def __init__(self, info, signature):
         self.info = info
-        self.signature = None
-        self.hash = None
-        self.ledger = ledger
-    #Prevents a sender from spending more money than they have
-    #Prevents a transaction from being faked - Done
-    def verify_transaction(self):
+        _, self.hash = signTransaction(info, 1, 1)
+        self.signature = signature
+        if not self.verifyTransaction():
+            raise ValueError("Transaction Signature is not Valid")
+        if not self.verifyHeader():
+            raise ValueError("Transaction Header is not Valid")
+    def verifyTransaction(self):
         hashFromSignature = pow(self.signature, *self.info["sender"])
         return hashFromSignature == self.hash
-
-    def preventOverSpending(self):
-        balance =  self.ledger.getBalance(self.info["sender"])
-        if balance >= (self.info["amount"] + self.info["fee"]):
-            return True
-        else:
-            return False
     def verifyHeader(self):
-        
+        headers = ["sender", "receiver", "amount", "timestamp", "fee"]
+        if len(headers) != len(self.info.keys()):
+            return False#header length does not match
+        for header, key in zip(headers, self.info.keys()):
+            if header != key:
+                return False#header values does not match
+        return True
 
     #Getters and Setters
     def getInfo(self):
         return self.info
     def getSignature(self):
         return self.signature
-class Transaction(EmptyTransaction):
-    def __init__(self, sender, receiver, amount, timestamp, ledger, fee):
-        super(Transaction, self).__init__(None, ledger)
-        senderKey = sender.getPublic()
-        receiverKey = receiver.getPublic()
-        self.info = {"sender":senderKey, "receiver":receiverKey, "amount":amount, "timestamp":timestamp, "fee":fee}
-        self.signature, self.hash = sender.signTransaction(self.info)
-
+class UserTransaction(BaseTransaction):
+    def __init__(self, sender_key, receiver_key, amount, fee, signfunc):
+        info = {"sender": sender_key, "receiver":receiver_key, "amount":amount, "timestamp":time.time(), "fee":fee}
+        self.signature, self.hash = signfunc(info)
+        super(UserTransaction, self).__init__(info, self.signature)
+class NodeTransaction(BaseTransaction):
+    def __init__(self, info, signature, ledger):
+        super(NodeTransaction, self).__init__(info, signature)
+        self.ledger = ledger
+    def preventOverSpending(self):
+        balance = self.ledger.getBalance(self.info["sender"])
+        if balance >= (self.info["amount"] + self.info["fee"]):
+            return True
+        else:
+            return False 
 
 if __name__ == "__main__":
     user1 = Wallet()

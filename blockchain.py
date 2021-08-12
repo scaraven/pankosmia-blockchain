@@ -114,7 +114,7 @@ class Block():
     def addTransaction(self, transaction):
         #Limit number of transactions per block
         if len(self.transactions) < self.limit:
-            if transaction.verify_transaction() and transaction.preventOverSpending():
+            if transaction.verifyTransaction() and transaction.preventOverSpending() and transaction.verifyHeader():
                 self.transactions[transaction.getSignature()] = transaction
                 self.block["transactions"] = list(self.transactions.keys())
     #Computes hash of own block
@@ -250,8 +250,8 @@ def test2_chain():
     #test_chain()
     user1 = wallet.Wallet(blockchain, ledger)
     user2 = wallet.Wallet(blockchain, ledger)
-    t1 = wallet.Transaction(user1, user2, 10, time.time(), ledger)
-    t2 = wallet.Transaction(user2, user1, 5, time.time(), ledger)
+    t1 = wallet.P2PTransaction(user1, user2, 10, time.time(), ledger)
+    t2 = wallet.P2PTransaction(user2, user1, 5, time.time(), ledger)
     block = Block(prevHash="0"*64)
     block.addTransaction(t1)
     block.addTransaction(t2)
@@ -270,7 +270,8 @@ if __name__ == "__main__":
     miner = Miner(initialBlock, mineruser, ledger)
     blockchain.addBlock(initialBlock)
     blockchain.updateLedger(initialBlock.getHash())
-    t1 = wallet.Transaction(mineruser, user1, 2, time.time(), ledger, 1)
+    info = {"sender": mineruser.getPublic(), "receiver":user1.getPublic(), "amount":2, "timestamp":time.time(), "fee":1}
+    t1 = wallet.NodeTransaction(info, mineruser.signTransaction(info)[0], ledger)
     secondBlock = Block(initialBlock.getHash())
     secondBlock.addTransaction(t1)
     miner = Miner(secondBlock, user2, ledger)
