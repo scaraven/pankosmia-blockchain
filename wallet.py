@@ -26,6 +26,11 @@ class Wallet():
 def signTransaction(transaction, d_key, n_key):
         hash = int.from_bytes(sha256(json.dumps(transaction).encode("utf-8")).digest(), byteorder='big')
         return pow(hash, d_key, n_key), hash
+class P2PTransaction():
+    def __init__(self, sender_key, receiver_key, amount, fee, signfunc):
+        info = {"sender": sender_key, "receiver":receiver_key, "amont":amount, "timestamp":time.time(), "fee":fee}
+        super(P2PTransaction, self).__init__(info, None)
+        self.signature, self.hash = signfunc(info)
 
 class EmptyTransaction():#this is to be used when a transaction class is being instantiated by someome other than the sender wallet
     def __init__(self, info, ledger):
@@ -45,6 +50,8 @@ class EmptyTransaction():#this is to be used when a transaction class is being i
             return True
         else:
             return False
+    def verifyHeader(self):
+        
 
     #Getters and Setters
     def getInfo(self):

@@ -71,17 +71,25 @@ class P2PNode(BasicNode):
             blockchain_info = {hash:block.getBlock()  for hash, block in self.blockchain.getBlockChain().items()}
             data = {**self.protocol, "BLOCKCHAIN": b64EncodeDictionary(blockchain_info)}
             self.send_to_node(connected_node, data)
-    def loopList(self, function, *args):
+    def loopList(self, function, *args):#this executes a functino with arguments *args for all known nodes
         for host, port in self.known_nodes.items():
             thread_client = self.connect_with_node(host, port)
             function(thread_client, *args)
-    def distTxn(self, txn):
+    def distTxn(self, txn):#distribute transaction to all known nodes
         if txn is not None:
             self.loopList(self.transmitTransaction, *(txn,))
-    def distBlock(self, block):
+    def distBlock(self, block):#distribute block to all known nodes
         if block is not None:
             self.blockchain.addBlock(block)
             self.loopList(self.transmitBlock, *(block,))
+    def transmitBalance(self, connected_node, response):
+        if "REQUEST" in response.keys() and response["REQUEST"] == "BALANCE":
+            if "USER" in response.keys():
+                #tuple
+                user_key = b64DecodeDictionary(response["USER"])
+                balance = self.blockchain.ledger.getBalance(user_key)
+                data = {**self.protocol, "BALANCE": balance}
+                self.send_to_node(connected_node, data)
     def node_message(self, connected_node, data):
         super(P2PNode, self).node_message(connected_node, data)
         if self.checkProtocol(connected_node, data):
@@ -102,8 +110,10 @@ if PORT == 9001:
 node = P2PNode(HOST, PORT, '127.0.0.1', 9001, isknown=isknown, blockchain=blockchain) #The last two args should be a node which is always up
 node.start()
 if connect:
+    breakpoint()
     miner = Wallet(blockchain, ledger)
     block = Block(prevHash="0"*64)
     Miner(block, miner, ledger)
-    node.blockchain.addBlock(block)
+    node.blockchain.addBlock(block)#
+    node.distBlock(block)
     node.distBlock(block)

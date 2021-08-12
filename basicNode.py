@@ -79,15 +79,24 @@ class BasicNode(Node):
             return False
     
     def getResponse(self, connected_node):
-        buffer = b''
-        buffer += connected_node.sock.recv(4096)
-        eot_pos = buffer.find(self.EOT_CHAR)
-        response = connected_node.parse_packet(buffer[:eot_pos])
-        if response is not None and self.checkProtocol(connected_node, response):
-            return response
-        else:
-            return None
-    
+        count = 0
+        while not connected_node.terminate_flag.is_set():
+            chunk = b''
+            try:
+                chunk = self.sock.recv(4096) 
+            except socket.timeout:
+                connected_node.main_node.debug_print("NodeConnection: timeout")
+                count += 1
+            if chunk != b'':
+                buffer += chunk
+                eot_pos = buffer.find(self.EOT_CHAR)
+
+                while eot_pos > 0:
+                    packet = buffer[:eot_pos]
+                    buffer = buffer[eot_pos + 1:]
+                    return connected_node.parse_packet(packet)
+            if count >= 10:
+                return None
     def transmitBlock(self, connected_node, block):#Transmits an individual block NODE AND MINER
         data = {**self.protocol, "TRANSMIT_BLOCK":"HASH "+str(block.getHash())}#Send hash of block
         self.send_to_node(connected_node, data)
@@ -105,9 +114,10 @@ class BasicNode(Node):
                 validation = {**self.protocol, "TRANSMIT_BLOCK": "NONE"}#We do not have the block, send the block to us
                 self.send_to_node(connected_node, validation)
                 response = self.getResponse(connected_node)
-                print("Response - {0}".format(response))
-                breakpoint()
-                block_info = b64DecodeDictionary(response["TRANSMIT_BLOCK"])
+                try:
+                    block_info = b64DecodeDictionary(response["TRANSMIT_BLOCK"])
+                except:
+                    breakpoint()
                 transaction_info = b64DecodeDictionary(response["TRANSMIT_TRANSACTIONS"])
                 block = Block()
                 block.block = block_info
@@ -152,7 +162,7 @@ class BasicNode(Node):
     def outbound_node_disconnected(self, connected_node):
         print("outbound_node_disconnected: " + connected_node.id)
     
-
+    
     #Copied from source code
     def connect_with_node(self, host, port, reconnect=False):
         """ Make a connection with another node that is running on host with port. When the connection is made, 
@@ -168,7 +178,7 @@ class BasicNode(Node):
         for node in self.nodes_outbound:
             if node.host == host and node.port == port:
                 print("connect_with_node: Already connected with this node (" + node.id + ").")
-                return True
+                return node
 
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
