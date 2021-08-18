@@ -5,10 +5,8 @@ from hashlib import sha256
 import time
 
 class Wallet():
-    def __init__(self, blockchain, ledger):
+    def __init__(self):
         self.__keyPair__ = RSA.generate(bits=1024)
-        self.blockchain = blockchain
-        self.ledger = ledger
     def getPublic(self):
         return self.__keyPair__.e, self.__keyPair__.n
     def setKey(self, keyPair):
@@ -18,9 +16,12 @@ class Wallet():
         hash = int.from_bytes(sha256(json.dumps(transaction).encode("utf-8")).digest(), byteorder='big')
         return pow(hash, self.__keyPair__.d, self.__keyPair__.n), hash
     def storeKey(self, path):
-        with open(path, "w") as fp:
+        with open(path, "wb") as fp:
             fp.write(self.__keyPair__.export_key('PEM'))
-    def getBalance(self):
+    def openKey(self, path):
+        with open(path, "rb") as fp:
+            self.__keyPair__ = RSA.import_key(fp.read())
+    def getBalance(self):#OBSELETE
         return self.ledger.getBalance(self.getPublic())
 
 def signTransaction(transaction, d_key, n_key):
