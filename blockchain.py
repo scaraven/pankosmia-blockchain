@@ -80,10 +80,11 @@ class Blockchain():
         transactions = block.transactions
         for transaction_hash, transaction in transactions.items():
             sender = transaction.info["sender"]
-            self.ledger.addTransaction(transaction)
+            self.ledger.addTransaction(transaction)#THIS IS WRONG?
             if self.ledger.getBalance(sender) < 0.0:
                 self.ledger.removeTransaction(transaction)
                 return False
+            self.ledger.removeTransaction(transaction)
         return True
     #Use recursion to remove blocks
     def removeChain(self, block_hash):
@@ -201,6 +202,7 @@ class TransactionLedger():
         #set: transaction_hashes
         self.pool = set()
     def addTransaction(self, transaction):
+        #breakpoint()
         info = transaction.getInfo()
         id_sender = self.computeHash(info["sender"])
         id_receiver = self.computeHash(info["receiver"])
@@ -223,6 +225,7 @@ class TransactionLedger():
         self.ledger[id_receiver] -= info["amount"]
         self.pool.remove(transaction.getSignature())
     def rewardMiner(self, block):
+        #breakpoint()
         reward = 5 #THIS IS A CONSTANT!
         miner = block.getBlock()["miner"]
         id_miner = self.computeHash(miner)
