@@ -84,10 +84,6 @@ class P2PNode(BasicNode):
             block = self.receiveBlock(connected_node, data, self.blockchain.getBlockChain().keys())
             txn = self.receiveTransaction(connected_node, data, self.blockchain.ledger.pool)
             self.distBlock(block)
-def b64EncodeDictionary(data):
-    return base64.b64encode(json.dumps(data).encode("ascii")).decode("ascii")
-def b64DecodeDictionary(data):
-    return json.loads(base64.b64decode(data.encode("ascii")).decode("ascii"))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Node Client Script")

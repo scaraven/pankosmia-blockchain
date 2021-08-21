@@ -145,7 +145,7 @@ class Block():
             if inf != key:
                 return False
         for transaction_hash, key in zip(self.transactions.keys(), info["transactions"]):
-            if transaction_hash != key:
+            if int(transaction_hash) != key:
                 return False
         if len(self.transactions) > 10:
             return False
