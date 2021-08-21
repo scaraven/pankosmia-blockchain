@@ -3,22 +3,9 @@ import argparse
 from basicNode import *
 from blockchain import *
 
-PORT = 31146
-HOST = "0.0.0.0"
+known_port = 9001
+known_host = "127.0.0.1"
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Node Client Script")
-    parser.add_argument("HOST", help="IP to listen on", default="127.0.0.1")
-    parser.add_argument("PORT", help="port to listen on", default=31146)
-    parser.add_argument("-t", "--thost", help="target host to connect to", dest="thost", default="127.0.0.1")
-    parser.add_argument("-p", "--tport", help="target port to connect to", dest="tport", default=9001)
-    parser.add_argument("-c", "--connect", dest="connect", action="store_true")
-
-
-    conf = vars(parser.parse_args())
-    PORT, HOST = int(conf["PORT"]), conf["HOST"]
-    thost, tport = conf["thost"], int(conf["tport"])
-    connect = conf["connect"]
 class P2PNode(BasicNode):
     """This class builds upon the BasicNode class and is specialised to perform any task that a node can perform including receiving and verifying blocks (although this is done in the Blockchain class), Transmitting blocks and transactions.
     """
@@ -102,18 +89,15 @@ def b64EncodeDictionary(data):
 def b64DecodeDictionary(data):
     return json.loads(base64.b64decode(data.encode("ascii")).decode("ascii"))
 
-blockchain = Blockchain()
-ledger = blockchain.ledger
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Node Client Script")
+    parser.add_argument("HOST", help="IP to listen on", default="127.0.0.1")
+    parser.add_argument("PORT", help="port to listen on", default=9000)
+    conf = vars(parser.parse_args())
+    PORT, HOST = int(conf["PORT"]), conf["HOST"]
+blockchain = None
 isknown = False
 if PORT == 9001:
     isknown = True
-node = P2PNode(HOST, PORT, '127.0.0.1', 9001, isknown=isknown, blockchain=blockchain) #The last two args should be a node which is always up
+node = P2PNode(HOST, PORT, known_host, known_port, isknown=isknown, blockchain=blockchain) #The last two args should be a node which is always up
 node.start()
-if connect:
-    breakpoint()
-    miner = Wallet(blockchain, ledger)
-    block = Block(prevHash="0"*64)
-    Miner(block, miner, ledger)
-    node.blockchain.addBlock(block)#
-    node.distBlock(block)
-    node.distBlock(block)

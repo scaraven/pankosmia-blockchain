@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import base64
 import hashlib
 import json
 import time
@@ -53,7 +54,7 @@ class Blockchain():
             pointer = self.blockchain[pointer].getBlock()["prevHash"]
 
             #We stop iterating if we reach the genesis block
-            if pointer == "0"*64 and iteration < self.valid_size - 1:
+            if pointer == "0"*64:
                 genesisReached = True
             iteration += 1
                 
@@ -100,9 +101,20 @@ class Blockchain():
         return self.blockchain
     def returnTrustedBlock(self):
         return self.resolved
-
-
-
+    def saveBlockchain(self, path):
+        persist_blockchain = b64EncodeDictionary({block_hash: block.saveBlock() for block_hash, block in self.blockchain.items()})
+        with open(path, "w") as fp:
+            fp.write(persist_blockchain)
+    def openBlockchain(self, path):
+        self.__init__(valid_size=self.valid_size)
+        with open(path, "r") as fp:
+            persist_blockchain = b64DecodeDictionary(fp.read())
+        for block_hash, block_encoded in persist_blockchain.items():
+            block = Block()
+            block.openBlock(block_encoded, self.ledger)
+            #Create tests and verification?
+            #It needs to be decided whether saved blockchain files need to be saved
+            self.addBlock(block)
 class Block():
     'Basic block for transactions'
     def __init__(self, prevHash=None, zeros=3):
@@ -165,7 +177,20 @@ class Block():
         return self.hash
     def getTransactions(self):
         return self.transactions
-
+    def saveBlock(self):
+        persist_transactions = {header: txn.persistTxn() for header, txn in self.transactions.items() }#persist all the transactions
+        persist = b64EncodeDictionary([self.block, persist_transactions])
+        return persist
+    def openBlock(self, encoded, ledger):#get encoded data and convert to block information
+        persist = b64DecodeDictionary(encoded)#
+        self.block, persist_transactions = persist
+        transactions = {}
+        for header, txn_data in persist_transactions.items():
+            txn = wallet.NodeTransaction(None, None, None, isempty=True)
+            txn.openTxn(txn_data, ledger)
+            assert int(header) == txn.getSignature(), "Signature and Header mismatch"
+            transactions[header] = txn
+        self.transactions = transactions
 class TransactionLedger():
     'Ledger of all trusted transactions for lookup'
     def __init__(self):
@@ -222,6 +247,10 @@ class TransactionLedger():
         else:
             return None
 
+def b64EncodeDictionary(data):
+    return base64.b64encode(json.dumps(data).encode("ascii")).decode("ascii")
+def b64DecodeDictionary(data):
+    return json.loads(base64.b64decode(data.encode("ascii")).decode("ascii"))
 
 def addBlock(blockchain, prevHash):
     block = Block(prevHash=prevHash)

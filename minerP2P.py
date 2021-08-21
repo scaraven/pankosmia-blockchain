@@ -5,6 +5,9 @@ from collections import OrderedDict
 import argparse
 from miner import *
 
+known_host = '127.0.0.1'
+known_port = '9001'
+
 class TransactionPool():
     """This class is responsible for storing valid transactions which can be later placed into a block, this should be able to support sorting by fee amout, timestamp time and etc..."""
     def __init__(self):
@@ -19,9 +22,10 @@ class TransactionPool():
     def removeTxn(self, signature):
         self.pool.remove(signature)
 class MinerP2P(BasicNode):
-    def __init__(self, host, port, known_host, known_port):
+    def __init__(self, host, port, known_host, known_port, minerwallet):
         super(MinerP2P, self).__init__(host, port, known_host, known_port, "MINER")
         self.pool = TransactionPool()
+        self.minerwallet = minerwallet
     def node_message(self, connected_node, data):
         super(MinerP2P, self).__init__(connected_node, data)
         if self.checkProtocol(connected_node, data):
@@ -33,7 +37,8 @@ class MinerP2P(BasicNode):
                 transactions = block.transactions
                 for transaction_hash, transaction_info in transactions.items():#loop through transactions and remove them
                     self.removeTxn(transaction_hash)
-    def mineBlock(self, 
+    def mineBlock(self):#TODO!
+        raise NotImplementedError
 def startup():
     parser = argparse.ArgumentParser(description="Miner Client Script")
     parser.add_argument("path", help="Wallet Private File")
@@ -42,13 +47,13 @@ def startup():
     walletkey_path = conf["path"]
     minerwallet = Wallet()
     if os.path.isfile(walletkey_path):
-        with open(walletkey_path, "r") as fp:
+        with open(walletkey_path, "rb") as fp:
             walletkey = RSA.import_key(fp.read())
         minerwallet.setKey(walletkey)#setup miner wallet
     else:
         raise ValueError("File does not exist {0}".format(walletkey_path))
-
-
+    miner = MinerP2P('127.0.0.1', 1337, known_host, known_port, minerwallet)
+    miner.start()
     
 if __name__ == "__main__":
     startup()

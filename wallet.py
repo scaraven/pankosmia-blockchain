@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import base64
 from Crypto.PublicKey import RSA
 import json
 from hashlib import sha256
@@ -60,15 +61,28 @@ class UserTransaction(BaseTransaction):
         self.signature, self.hash = signfunc(info)
         super(UserTransaction, self).__init__(info, self.signature)
 class NodeTransaction(BaseTransaction):
-    def __init__(self, info, signature, ledger):
-        super(NodeTransaction, self).__init__(info, signature)
-        self.ledger = ledger
+    def __init__(self, info, signature, ledger, isempty=False):
+        if not isempty:
+            super(NodeTransaction, self).__init__(info, signature)
+            self.ledger = ledger
     def preventOverSpending(self):
         balance = self.ledger.getBalance(self.info["sender"])
         if balance >= (self.info["amount"] + self.info["fee"]):
             return True
         else:
             return False 
+    def persistTxn(self):
+        persist = b64EncodeDictionary([self.info, self.signature])
+        return persist
+    def openTxn(self, encoded, ledger):
+        info, signature = b64DecodeDictionary(encoded)
+        info["sender"] = tuple(info["sender"])
+        info["receiver"] = tuple(info["receiver"])
+        self.__init__(info, signature, ledger)
+def b64EncodeDictionary(data):
+    return base64.b64encode(json.dumps(data).encode("ascii")).decode("ascii")
+def b64DecodeDictionary(data):
+    return json.loads(base64.b64decode(data.encode("ascii")).decode("ascii"))
 
 if __name__ == "__main__":
     user1 = Wallet()

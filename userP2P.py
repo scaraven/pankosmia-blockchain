@@ -7,7 +7,7 @@ import argparse
 import os
 
 known_host = '127.0.0.1'
-known_port = 9000
+known_port = 9001
 
 #TODO: User should send transactions to more than one node
 
@@ -49,5 +49,5 @@ if __name__ == "__main__":
         wallet.openKey(path)
     if amount is not None and receiver is not None and fee is not None:
         receiver = tuple(int(comp) for comp in receiver.split(":"))
-        node = UserP2P('0.0.0.0', 8999, known_host, known_port)
+        node = UserP2P('127.0.0.1', 8999, known_host, known_port)
         node.createTransaction(receiver, amount, fee)
