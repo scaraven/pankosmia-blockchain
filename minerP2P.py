@@ -28,15 +28,18 @@ class MinerP2P(BasicNode):
         self.minerwallet = minerwallet
     def node_message(self, connected_node, data):
         super(MinerP2P, self).__init__(connected_node, data)
+        self.connected_node.busy = True
         if self.checkProtocol(connected_node, data):
             block = self.receiveBlock(connected_node, data, [])#we pass an empty array as we will accept all blocks
             transaction = self.receiveTransaction(connected_node, data, self.pool.pool)
+            self.connected_node.busy = False
             if transaction is not None:
                 self.pool.addTxn(transaction)#add transaction to our pool
             if block is not None:
                 transactions = block.transactions
                 for transaction_hash, transaction_info in transactions.items():#loop through transactions and remove them
                     self.removeTxn(transaction_hash)
+        self.connected_node.busy = False
     def mineBlock(self):#TODO!
         raise NotImplementedError
 def startup():

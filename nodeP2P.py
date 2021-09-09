@@ -2,6 +2,7 @@
 import argparse
 from basicNode import *
 from blockchain import *
+import os
 
 known_port = 9001
 known_host = "127.0.0.1"
@@ -13,11 +14,20 @@ class P2PNode(BasicNode):
         super(P2PNode, self).__init__(host, port, known_host, known_port, "NODE", isknown=isknown)
 
         self.blockchain = blockchain
+        if not isknown:
+            self.startup()
+            if self.blockchain == None:
+                thread_client = self.connect_with_node(known_host, known_port)
+                blockchain = self.requestBlockchain(thread_client)
+                if blockchain != None:
+                    self.blockchain = blockchain
+                else:
+                    raise ValueError("No valid blockchain found!")
         if verify:
             if not verifyBlockchain(self.blockchain):
                 raise ValueError("Invalid Blockchain")
-        self.startup()
     def startup(self): #run this automatically when class is initiated
+        #Request IPlist from known node
         for host, port in self.known_nodes.items():
             self.getNodes(host, port)
     def getNodes(self, host, port):
@@ -46,17 +56,15 @@ class P2PNode(BasicNode):
         if "BLOCKCHAIN" in response.keys():
             blockchain = Blockchain()
             #Dictionary which stores block_hash:block_class_info_dictionary
-            blockchain_info = b64DecodeDictionary(response["BLOCKCHAIN"])#create new temporary blockchain
-            for hash, info in blockchain_info.items():
-                block = Block()
-                block.block = info
-                if not blockchain.addBlock(block):#validate our blockchain
-                    return None#if not valid return None
+            blockchain_info = response["BLOCKCHAIN"]#create new temporary blockchain
+            if not blockchain.openBlockchain(blockchain_info):
+                return None
             return blockchain
     def respondBlockchain(self, connected_node, response):
         if "REQUEST" in response.keys() and response["REQUEST"] == "BLOCKCHAIN":#If the request is valid, send the blockchain information
-            blockchain_info = {hash:block.getBlock()  for hash, block in self.blockchain.getBlockChain().items()}
-            data = {**self.protocol, "BLOCKCHAIN": b64EncodeDictionary(blockchain_info)}
+            blockchain_info = b64EncodeDictionary({block_hash: block.saveBlock() for block_hash, block in self.blockchain.blockchain.items()})
+
+            data = {**self.protocol, "BLOCKCHAIN": blockchain_info}
             self.send_to_node(connected_node, data)
     def loopList(self, function, *args):#this executes a functino with arguments *args for all known nodes
         for host, port in self.known_nodes.items():
@@ -81,19 +89,28 @@ class P2PNode(BasicNode):
         super(P2PNode, self).node_message(connected_node, data)
         if self.checkProtocol(connected_node, data):
             self.respondBlockchain(connected_node, data)
-            block = self.receiveBlock(connected_node, data, self.blockchain.getBlockChain().keys())
-            txn = self.receiveTransaction(connected_node, data, self.blockchain.ledger.pool)
-            self.distBlock(block)
-
+            if isinstance(self.blockchain, Blockchain):
+                block = self.receiveBlock(connected_node, data, self.blockchain.getBlockChain().keys())
+                txn = self.receiveTransaction(connected_node, data, self.blockchain.ledger.pool)
+                self.distBlock(block)
+        connected_node.busy = False
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Node Client Script")
-    parser.add_argument("HOST", help="IP to listen on", default="127.0.0.1")
-    parser.add_argument("PORT", help="port to listen on", default=9000)
+    parser.add_argument("host", help="IP to listen on", default="127.0.0.1")
+    parser.add_argument("port", help="port to listen on", default=9000)
+    parser.add_argument("-b", help="Blockchain blk file", dest="blockpath", default=None)
     conf = vars(parser.parse_args())
-    PORT, HOST = int(conf["PORT"]), conf["HOST"]
-blockchain = None
-isknown = False
-if PORT == 9001:
-    isknown = True
-node = P2PNode(HOST, PORT, known_host, known_port, isknown=isknown, blockchain=blockchain) #The last two args should be a node which is always up
-node.start()
+    blockchain = None
+    blockpath, port, host = conf["blockpath"], int(conf["port"]), conf["host"]
+    if blockpath != None and os.path.isfile(blockpath):
+        blockchain = Blockchain()
+        with open(blockpath, "r") as fp:
+            blockchain.openBlockchain(fp.read())
+
+    isknown = False
+    if port == 9001:#TEMPORARY
+        isknown = True
+        if blockchain == None:
+            blockchain = Blockchain()
+    node = P2PNode(host, port, known_host, known_port, isknown=isknown, blockchain=blockchain) #The last two args should be a node which is always up
+    node.start()

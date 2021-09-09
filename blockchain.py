@@ -106,16 +106,19 @@ class Blockchain():
         persist_blockchain = b64EncodeDictionary({block_hash: block.saveBlock() for block_hash, block in self.blockchain.items()})
         with open(path, "w") as fp:
             fp.write(persist_blockchain)
-    def openBlockchain(self, path):
+    def openBlockchain(self, persist_blockchain):
         self.__init__(valid_size=self.valid_size)
-        with open(path, "r") as fp:
-            persist_blockchain = b64DecodeDictionary(fp.read())
+        #with open(path, "r") as fp:
+        #    persist_blockchain = b64DecodeDictionary(fp.read())
+        persist_blockchain = b64DecodeDictionary(persist_blockchain)
         for block_hash, block_encoded in persist_blockchain.items():
             block = Block()
             block.openBlock(block_encoded, self.ledger)
             #Create tests and verification?
             #It needs to be decided whether saved blockchain files need to be saved
-            self.addBlock(block)
+            if not self.addBlock(block):
+                return False
+        return True
 class Block():
     'Basic block for transactions'
     def __init__(self, prevHash=None, zeros=3):

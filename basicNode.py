@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from blockchain import *
+from customConnection import CustomNodeConnection
 from wallet import *
 import socket
 from p2pnetwork.node import Node
@@ -21,7 +22,7 @@ class BasicNode(Node):
             self.known_nodes[known_host] = known_port
 
         #CONSTANTS
-        assert TYPE in ["NODE", "MINER"], "Invalid Type for Basic Node"
+        #assert TYPE in ["NODE", "MINER"], "Invalid Type for Basic Node"
         self.TYPE = TYPE
         self.protocol = {"PROTOCOL": "PSKA 0.1"}
         self.EOT_CHAR = 0x04.to_bytes(1, 'big')
@@ -79,24 +80,10 @@ class BasicNode(Node):
             return False
     
     def getResponse(self, connected_node):
-        count = 0
-        while not connected_node.terminate_flag.is_set():
-            chunk = b''
-            try:
-                chunk = self.sock.recv(4096) 
-            except socket.timeout:
-                connected_node.main_node.debug_print("NodeConnection: timeout")
-                count += 1
-            if chunk != b'':
-                buffer += chunk
-                eot_pos = buffer.find(self.EOT_CHAR)
-
-                while eot_pos > 0:
-                    packet = buffer[:eot_pos]
-                    buffer = buffer[eot_pos + 1:]
-                    return connected_node.parse_packet(packet)
-            if count >= 10:
-                return None
+        chunk = connected_node.sock.recv(4096) 
+        eot_pos = chunk.find(self.EOT_CHAR)
+        packet = chunk[:eot_pos]
+        return connected_node.parse_packet(packet)
     def transmitBlock(self, connected_node, block):#Transmits an individual block NODE AND MINER
         data = {**self.protocol, "TRANSMIT_BLOCK":"HASH "+str(block.getHash())}#Send hash of block
         self.send_to_node(connected_node, data)
@@ -125,7 +112,7 @@ class BasicNode(Node):
                 if block.verifyPoW() and block.verifyHeader():
                     return block#return block
     def transmitTransaction(self, connected_node, transaction): #USER AND NODE
-        data = {**self.protocol, "TRANSMIT_TRANSACTION": "HASH "+transaction.getSignature()}
+        data = {**self.protocol, "TRANSMIT_TRANSACTION": "HASH "+str(transaction.getSignature())}
         self.send_to_node(connected_node, data)
         response = self.getResponse(connected_node)
         if "TRANSMIT_TRANSACTION" in response.keys() and response["TRANSMIT_TRANSACTION"] == "NONE":
@@ -150,9 +137,11 @@ class BasicNode(Node):
 
     def node_message(self, connected_node, data):
         print("node_message from " + connected_node.id + ": " + str(data))
+        connected_node.busy = True
         if self.checkProtocol(connected_node, data):
             self.handleHandshake(connected_node, outbound=False, response=data)
             self.handleIPList(connected_node, outbound=False, response=data)
+        connected_node.busy = False
     def outbound_node_connected(self, connected_node):
         print("outbound_node_connected: " + connected_node.id)
     def inbound_node_connected(self, connected_node):
@@ -162,9 +151,9 @@ class BasicNode(Node):
 
     def outbound_node_disconnected(self, connected_node):
         print("outbound_node_disconnected: " + connected_node.id)
-    
-    
-    #Copied from source code
+    def create_new_connection(self, connection, id, host, port):
+        return CustomNodeConnection(self, connection, id, host, port)
+    #Modified from source code
     def connect_with_node(self, host, port, reconnect=False):
         """ Make a connection with another node that is running on host with port. When the connection is made, 
             an event is triggered outbound_node_connected. When the connection is made with the node, it exchanges
