@@ -17,8 +17,10 @@ class P2PNode(BasicNode):
         if not isknown:
             self.startup()
             if self.blockchain == None:
+                time.sleep(1)
                 thread_client = self.connect_with_node(known_host, known_port)
                 blockchain = self.requestBlockchain(thread_client)
+                self.disconnect_with_node(thread_client)
                 if blockchain != None:
                     self.blockchain = blockchain
                 else:
@@ -30,18 +32,6 @@ class P2PNode(BasicNode):
         #Request IPlist from known node
         for host, port in self.known_nodes.items():
             self.getNodes(host, port)
-    def getNodes(self, host, port):
-        """This visits a node, adds it to our known_nodes dict using handleHandshake,
-        requests the IPList and then repeats for every node in that list"""
-        thread_client = self.connect_with_node(host, port)
-        self.handleHandshake(thread_client)
-        iplist = self.handleIPList(thread_client)
-        self.disconnect_with_node(thread_client)
-        if iplist is not None:
-            for host, port in iplist.items():
-                if host not in self.known_nodes.keys() or self.known_nodes[host] != port:
-
-                    getNodes(host, port)#repeat process recursively
     def verifyBlockchain(self, blockchain):#check whether our blockchain is valid
         tempblockchain = Blockchain()
         blockchain = blockchain.getBlockChain()
@@ -50,6 +40,7 @@ class P2PNode(BasicNode):
                 return False
         return True#Once every block is checked, we know that is indeed valid
     def requestBlockchain(self, connected_node):#request full blockchain from node
+        connected_node.busy = True
         data = {**self.protocol, "REQUEST":"BLOCKCHAIN"}#Send request for a blockchain
         self.send_to_node(connected_node, data)
         response = self.getResponse(connected_node)#get response
@@ -60,6 +51,7 @@ class P2PNode(BasicNode):
             if not blockchain.openBlockchain(blockchain_info):
                 return None
             return blockchain
+        connected_node.busy = False
     def respondBlockchain(self, connected_node, response):
         if "REQUEST" in response.keys() and response["REQUEST"] == "BLOCKCHAIN":#If the request is valid, send the blockchain information
             blockchain_info = b64EncodeDictionary({block_hash: block.saveBlock() for block_hash, block in self.blockchain.blockchain.items()})
