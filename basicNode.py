@@ -11,6 +11,7 @@ class BasicNode(Node):
     """A Basic Class which deals with fundemental protocols that any user on the Blockchain P2P Network should be able to perform
     This includes initiating Handshakes and retrieving lists of known endpoints. This class be built upon to specialise to either node, miner or user tasks"""
     def __init__(self, host, port, known_host, known_port, TYPE, isknown=False, id=None, callback=None, max_connections=5):
+        id = port#TEMPORARY
         super(BasicNode, self).__init__(host, port, id, callback, max_connections)
         self.host = host
         self.port = port
@@ -44,9 +45,10 @@ class BasicNode(Node):
         connected_node.busy = True
         data = {**self.protocol, "REQUEST": "IPLIST"}
         self.send_to_node(connected_node, data)#send a request to the server for their list of known nodes
-        response = self.getResponse(connected_node)#get response <<----- THIS NEEDS TO BE FIXED
+        response = self.getResponse(connected_node)#get response from node
         if "IPLIST" in response.keys():
             iplist = b64DecodeDictionary(response["IPLIST"])
+            iplist = {k:v for k,v in iplist.items() if k != self.host and v != self.port}
             print("Received IP list - {0}".format(iplist))
             self.known_nodes.update(iplist) #update our IPLIST <<---- THIS IS VULNERABLE TO UNAUTHORISED DATA MODIFICATION
             return iplist
@@ -64,20 +66,39 @@ class BasicNode(Node):
         response = self.getResponse(connected_node) #get reponse
         if "TYPE" in response.keys(): 
             if response["TYPE"] in  ["NODE", "MINER"]: #if it is indeed a node, store it as a known node
-                host = connected_node.host
-                port = connected_node.port
-                self.known_nodes[host] = port #update our known nodes
+                host, port = response.pop("HOST"), response.pop("PORT")
+                if host != None and port != None:
+                    self.known_nodes[host] = port #update our known nodes
+        self.transmitOKMessage(connected_node)#send OK message to acknowledge communication has finished
+        ok = self.receiveOKMessage(connected_node)
         connected_node.busy = False
+        if ok != True:#If we do not get a OK message in return then the outboud node wants to start another protocol
+            self.node_message(connected_node, ok)#run the correct protocol
     def receiveHandshake(self, connected_node, response): #Server side
         connected_node.busy = True
-        if "VERIFY" in response.keys():
-            if response["VERIFY"] == "TYPE":
-                validation = {**self.protocol, "TYPE":self.TYPE}
-                self.send_to_node(connected_node, validation)
-            #if response["FIRST"] == True:
-                
-             #   self.transmitHandshake(connected_node, first=False)
+        verify = response.pop("VERIFY", None)
+        if verify == "TYPE":
+            validation = {**self.protocol, "TYPE":self.TYPE, "HOST":self.host, "PORT":self.port}
+            self.send_to_node(connected_node, validation)
+            time.sleep(0.1)
+            ok = self.receiveOKMessage(connected_node)
+            if self.known_nodes.get(connected_node.host) != connected_node.port and response.pop("FIRST") == True:
+                self.transmitHandshake(connected_node, first=False)
+            else:
+                self.transmitOKMessage(connected_node)
         connected_node.busy = False
+    def transmitOKMessage(self, connected_node):#transmitting an OK message means the end of communication
+        data = {**self.protocol, "MESSAGE":"OK"}
+        self.send_to_node(connected_node, data)
+    def receiveOKMessage(self, connected_node):#this should not be run inside node_message
+        connected_node.busy = True
+        response = self.getResponse(connected_node)
+        connected_node.busy = False
+        if self.checkProtocol(connected_node, response):
+            if response.pop("MESSAGE", None) == "OK":
+                return True
+            else:
+                return response
     def checkProtocol(self, connected_node, message): #Makes sure that the protocl we are communicating on is valid although this can easily be avoided
         if "PROTOCOL" in message.keys() and message["PROTOCOL"] == self.protocol["PROTOCOL"]:
             return True
@@ -124,10 +145,7 @@ class BasicNode(Node):
                 validation = {**self.protocol, "TRANSMIT_BLOCK": "NONE"}#We do not have the block, send the block to us
                 self.send_to_node(connected_node, validation)
                 response = self.getResponse(connected_node)
-                try:
-                    block_info = b64DecodeDictionary(response["TRANSMIT_BLOCK"])
-                except:
-                    breakpoint()
+                block_info = b64DecodeDictionary(response["TRANSMIT_BLOCK"])
                 transaction_info = b64DecodeDictionary(response["TRANSMIT_TRANSACTIONS"])
                 block = Block()
                 block.block = block_info

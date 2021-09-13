@@ -41,7 +41,7 @@ class MinerP2P(BasicNode):
                     self.removeTxn(transaction_hash)
         self.connected_node.busy = False
     def mineBlock(self):#TODO!
-        raise NotImplementedError
+        #add transactions to a block
 def startup():
     parser = argparse.ArgumentParser(description="Miner Client Script")
     parser.add_argument("path", help="Wallet Private File")

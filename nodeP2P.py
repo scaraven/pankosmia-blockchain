@@ -30,8 +30,14 @@ class P2PNode(BasicNode):
                 raise ValueError("Invalid Blockchain")
     def startup(self): #run this automatically when class is initiated
         #Request IPlist from known node
-        for host, port in self.known_nodes.items():
-            self.getNodes(host, port)
+        v1 = {}
+        while v1 != self.known_nodes and len(self.known_nodes.keys()) < 20:
+            diff = set(v1.items()) ^ set(self.known_nodes.items())
+            diff = {k:v for k,v in diff}
+            v1 = self.known_nodes.copy()
+            for host, port in diff.items():
+                self.getNodes(host, port)
+            #breakpoint()
     def verifyBlockchain(self, blockchain):#check whether our blockchain is valid
         tempblockchain = Blockchain()
         blockchain = blockchain.getBlockChain()
