@@ -11,7 +11,7 @@ class Wallet():
     def getPublic(self):
         return self.__keyPair__.e, self.__keyPair__.n
     def setKey(self, keyPair):
-        assert isintance(keyPair, type(self.__keyPair__)), "Invalid KeyPair type"
+        assert isinstance(keyPair, type(self.__keyPair__)), "Invalid KeyPair type"
         self.__keyPair__ = keyPair
     def signTransaction(self, transaction):
         hash = int.from_bytes(sha256(json.dumps(transaction).encode("utf-8")).digest(), byteorder='big')

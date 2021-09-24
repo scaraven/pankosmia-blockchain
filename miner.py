@@ -5,7 +5,7 @@ import json
 
 class Miner():
     'Miner classes which finds PoW for Blocks'
-    def __init__(self, Block, miner, ledger):
+    def __init__(self, Block, miner):
         self.Block = Block
         self.Block.block["miner"] = miner.getPublic()
         self.mine()

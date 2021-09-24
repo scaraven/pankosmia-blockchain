@@ -25,7 +25,7 @@ class BasicNode(Node):
         #CONSTANTS
         #assert TYPE in ["NODE", "MINER"], "Invalid Type for Basic Node"
         self.TYPE = TYPE
-        self.protocol = {"PROTOCOL": "PSKA 0.1"}
+        self.protocol = {"PROTOCOL": "PSKA 0.2"}
         self.EOT_CHAR = 0x04.to_bytes(1, 'big')
 
 
@@ -135,6 +135,7 @@ class BasicNode(Node):
             self.send_to_node(connected_node, block_data)
         connected_node.busy = False
     def receiveBlock(self, connected_node, response, blockchain_keys):#MINER and NODE
+        #breakpoint()
         connected_node.busy = True
         if "TRANSMIT_BLOCK" in response.keys():
             hash = response["TRANSMIT_BLOCK"].lstrip("HASH ")#Parse response and extract block hash
@@ -177,7 +178,7 @@ class BasicNode(Node):
                 signature = response["SIGNATURE"]
                 transaction = NodeTransaction(transaction_info, signature, self.blockchain.ledger)
                 if transaction.verifyTransaction() and transaction.verifyHeader():
-                    pool = transaction.getSignature()#add the transaction to our pool
+                    pool.add(transaction.getSignature())#add the transaction to our pool
                     return transaction
         connected_node.busy = False
 
@@ -229,7 +230,8 @@ class BasicNode(Node):
             for node in self.nodes_inbound:
                 if node.host == host and node.id == connected_node_id:
                     print("connect_with_node: This node (" + node.id + ") is already connected with us.")
-                    return True
+                    self.disconnect_with_node(node)
+                    self.connect_with_node(host, port)
 
             thread_client = self.create_new_connection(sock, connected_node_id, host, port)
             thread_client.start()

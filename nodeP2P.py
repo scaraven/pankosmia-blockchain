@@ -37,7 +37,6 @@ class P2PNode(BasicNode):
             v1 = self.known_nodes.copy()
             for host, port in diff.items():
                 self.getNodes(host, port)
-            #breakpoint()
     def verifyBlockchain(self, blockchain):#check whether our blockchain is valid
         tempblockchain = Blockchain()
         blockchain = blockchain.getBlockChain()
