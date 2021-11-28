@@ -39,6 +39,7 @@ class BaseTransaction():#this is to be used when a transaction class is being in
         if not self.verifyHeader():
             raise ValueError("Transaction Header is not Valid")
     def verifyTransaction(self):
+        _, self.hash = signTransaction(self.info, 1, 1)
         hashFromSignature = pow(self.signature, *self.info["sender"])
         return hashFromSignature == self.hash
     def verifyHeader(self):

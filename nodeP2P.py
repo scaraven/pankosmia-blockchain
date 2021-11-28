@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import argparse
+import atexit
 from basicNode import *
 from blockchain import *
 import os
+
 
 known_port = 9001
 known_host = "127.0.0.1"
@@ -14,6 +16,7 @@ class P2PNode(BasicNode):
         super(P2PNode, self).__init__(host, port, known_host, known_port, "NODE", isknown=isknown)
 
         self.blockchain = blockchain
+        atexit.register(exit_handler, self)
         if not isknown:
             self.startup()
             if self.blockchain == None:
@@ -91,7 +94,15 @@ class P2PNode(BasicNode):
                 txn = self.receiveTransaction(connected_node, data, self.blockchain.ledger.pool)
                 self.distBlock(block)
         connected_node.busy = False
+def exit_handler(node):
+    if isinstance(node, P2PNode) and node.blockchain != None:
+        hasher = hashlib.md5()
+        hasher.update(bytes(node.id, encoding="ascii"))
+        path = hasher.digest().hex() + ".blkch"
+        print("[*] Saving blockchain to {0}".format(path))
+        node.blockchain.saveBlockchain(path)
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(description="Node Client Script")
     parser.add_argument("host", help="IP to listen on", default="127.0.0.1")
     parser.add_argument("port", help="port to listen on", default=9000)

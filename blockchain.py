@@ -108,8 +108,6 @@ class Blockchain():
             fp.write(persist_blockchain)
     def openBlockchain(self, persist_blockchain):
         self.__init__(valid_size=self.valid_size)
-        #with open(path, "r") as fp:
-        #    persist_blockchain = b64DecodeDictionary(fp.read())
         persist_blockchain = b64DecodeDictionary(persist_blockchain)
         for block_hash, block_encoded in persist_blockchain.items():
             block = Block()
@@ -122,11 +120,11 @@ class Blockchain():
 class Block():
     'Basic block for transactions'
     def __init__(self, prevHash=None, zeros=3):
-        self.limit = 10
-        self.transactions = {}
-        self.zeros = zeros
+        self.limit = 10#transaction limit
+        self.transactions = {}#dictionary transaction_hash: transaction object
+        self.zeros = zeros#the number of zeros required for PoW
         self.block = {"prevHash":prevHash, "transactions":list(self.transactions.keys()), "timestamp":time.time(), "PoW":0, "zeros":self.zeros, "miner":""}
-        self.hash = ""
+        self.hash = ""#the hash of the entire block
     def addTransaction(self, transaction):
         #Limit number of transactions per block
         if len(self.transactions) < self.limit:
@@ -251,7 +249,7 @@ class TransactionLedger():
         if id in self.ledger.keys():
             return self.ledger[id]
         else:
-            return None
+            return 0.0
 
 def b64EncodeDictionary(data):
     return base64.b64encode(json.dumps(data).encode("ascii")).decode("ascii")

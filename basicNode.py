@@ -7,6 +7,8 @@ from p2pnetwork.node import Node
 import base64
 import json
 
+import threading
+
 class BasicNode(Node):
     """A Basic Class which deals with fundemental protocols that any user on the Blockchain P2P Network should be able to perform
     This includes initiating Handshakes and retrieving lists of known endpoints. This class be built upon to specialise to either node, miner or user tasks"""
@@ -111,9 +113,13 @@ class BasicNode(Node):
     def getResponse(self, connected_node):
         content = self.getContent(connected_node)
         if content != None:
+            print("Found content")
             return content
         else:
-            connected_node.listen()#if our connection did not pick up the message automatically then listen for it ourselves
+            print("Listening for content")
+            with threading.Lock():
+                connected_node.listen()#if our connection did not pick up the message automatically then listen for it ourselves
+            print("Listened for a while")
             content = self.getContent(connected_node)
             if content != None:
                 return content
@@ -214,7 +220,7 @@ class BasicNode(Node):
         # Check if node is already connected with this node!
         for node in self.nodes_outbound:
             if node.host == host and node.port == port:
-                print("connect_with_node: Already connected with this node (" + node.id + ").")
+                #print("connect_with_node: Already connected with this node (" + node.id + ").")
                 return node
 
         try:
@@ -229,7 +235,7 @@ class BasicNode(Node):
             # Fix bug: Cannot connect with nodes that are already connected with us!
             for node in self.nodes_inbound:
                 if node.host == host and node.id == connected_node_id:
-                    print("connect_with_node: This node (" + node.id + ") is already connected with us.")
+                    #print("connect_with_node: This node (" + node.id + ") is already connected with us.")
                     self.disconnect_with_node(node)
                     self.connect_with_node(host, port)
 

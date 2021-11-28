@@ -7,7 +7,7 @@ class CustomNodeConnection(NodeConnection):
     def __init__(self, main_node, sock, id, host, port):
         super(CustomNodeConnection, self).__init__(main_node, sock, id, host, port)
         self.busy = False
-        self.content = None
+        self.content = None#
     #overwrite source code
     def run(self):
         """The main loop of the thread to handle the connection with the node. Within the
@@ -26,7 +26,9 @@ class CustomNodeConnection(NodeConnection):
     def listen(self):
         chunk = b''
         try:
-            chunk = self.sock.recv(4096) 
+            #print("Inside listen(), listening for chunk - {0}".format(time.time()))
+            chunk = self.sock.recv(4096)
+            #print("Received chunk from listen() - {0}".format(time.time()))
 
         except socket.timeout:
             self.main_node.debug_print("NodeConnection: timeout")
