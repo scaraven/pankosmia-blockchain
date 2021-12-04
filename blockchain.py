@@ -27,17 +27,17 @@ class Blockchain():
         self.ledger = TransactionLedger()
     #This adds a block
     def addBlock(self, block):
-        if block.verifyPoW() and block.verifyHeader():
+        if block.verifyPoW() and block.verifyHeader():#verify the block is valid
             block_info = block.getBlock()
-            prevHash = block_info["prevHash"]
+            prevHash = block_info["prevHash"]#extract pointer from block
             if (prevHash in self.blockchain.keys() or prevHash == "0"*64) \
-             and prevHash not in self.resolved:
-                self.blockchain[block.getHash()] = block
+             and prevHash not in self.resolved: #check whether pointer exists
+                self.blockchain[block.getHash()] = block#update blockchain
                 self.children[block.getHash()] = []
                 self.children[prevHash].append(block.getHash())
                 self.resolveConflict(block.getHash())
                 return True
-            else:
+            else:#if the block is not valid, explain why.
                 if prevHash in self.resolved:
                     print("Cannot add to blockchain due to resolved block")
                 else:
@@ -47,33 +47,46 @@ class Blockchain():
         return False
     #Resolve any fixable conflicts after each block is added
     def resolveConflict(self, pointer):
-        genesisReached = False
+        genesisReached = False#shows whenever we have "reached" the first block in the blockchain
         iteration = 0
+        #keep on iteration until we hit the start of the blockchain
+        #or we have made *self.valid_size* iterations
         while iteration < self.valid_size and not genesisReached:
             child = pointer
-            pointer = self.blockchain[pointer].getBlock()["prevHash"]
+            pointer = self.blockchain[pointer].getBlock()["prevHash"]#get parent block hash
 
             #We stop iterating if we reach the genesis block
             if pointer == "0"*64:
                 genesisReached = True
-            iteration += 1
-                
+            iteration += 1#increment iteration
+        #finish while loop
+        #nor our pointer is pointing towards our block that is to be resolved
         if pointer not in self.resolved and not genesisReached:
+            #we can update the ledger with the transaction inside
+            #now that our block is trusted
             if not self.verifyTransactions(pointer):
                 self.removeChain(pointer)
             else:
                 self.updateLedger(pointer)
-                self.resolved.add(pointer)
+                self.resolved.add(pointer)#add pointer to the set of all resolved blocks
+
+                #once a block is resolved, all wrong children blocks (and their children) must be removed
                 if len(self.children[pointer]) > 1:
-                    for block_hash in self.children[pointer]:
+                    for block_hash in self.children[pointer]:#loop through all bad children
                         if child != block_hash:
-                            self.removeChain(block_hash)
+                            self.removeChain(block_hash)#remove all bad chains
+        elif iteration == self.valid_size and genesisReached:#create separate case for genesis block
+            self.resolved.add(pointer)
+            if len(self.children[pointer]) > 1:#the same code as seen before
+                for block_hash in self.children[pointer]:
+                    if child != block_hash:
+                        self.removeChain(block_hash)
     def updateLedger(self, pointer):
-        if pointer != "0"*64:
+        if pointer != "0"*64:#make sure the pointer is not the genesisBlcok
             block = self.blockchain[pointer]
-            for transaction in block.getTransactions().values():
-                self.ledger.addTransaction(transaction)
-        self.ledger.rewardMiner(block)
+            for transaction in block.getTransactions().values():#loop through all transactions
+                self.ledger.addTransaction(transaction)#add transaction to ledger
+        self.ledger.rewardMiner(block)#finally reward the miner for their work
     def verifyTransactions(self, pointer):#prevent transaction smuggling
         #block of type Block Class
         block = self.blockchain[pointer]
@@ -90,9 +103,9 @@ class Blockchain():
     def removeChain(self, block_hash):
         print("Removing block {0}".format(block_hash))
         if len(self.children[block_hash]) != 0:
-            for child_block_hash in self.children[block_hash]:
-                self.removeChain(child_block_hash)
-        del self.blockchain[block_hash]
+            for child_block_hash in self.children[block_hash]:#loop through all children
+                self.removeChain(child_block_hash)#recursively remove each branch
+        del self.blockchain[block_hash]#finally delete the root
         del self.children[block_hash]
 
     #Getters and Setters
@@ -259,7 +272,6 @@ def b64DecodeDictionary(data):
 def addBlock(blockchain, prevHash):
     block = Block(prevHash=prevHash)
     miner = Miner(block)
-    miner.mine()
     blockchain.addBlock(block)
     return block.getHash()
 
@@ -297,6 +309,8 @@ if __name__ == "__main__":
     blockchain = Blockchain(valid_size=3)
     ledger = blockchain.ledger
     mineruser = wallet.Wallet(blockchain, ledger)
+    test_chain()
+def test2_chain():
     initialBlock = Block(prevHash="0"*64)
     user1 = wallet.Wallet(blockchain, ledger)
     user2 = wallet.Wallet(blockchain, ledger)

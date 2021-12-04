@@ -183,7 +183,7 @@ class BasicNode(Node):
                 transaction_info = b64DecodeDictionary(response["INFO"])
                 signature = response["SIGNATURE"]
                 transaction = NodeTransaction(transaction_info, signature, self.blockchain.ledger)
-                if transaction.verifyTransaction() and transaction.verifyHeader():
+                if transaction.verifyTransaction() and transaction.verifyHeader() and hash == transaction.hash:
                     pool.add(transaction.getSignature())#add the transaction to our pool
                     return transaction
         connected_node.busy = False
