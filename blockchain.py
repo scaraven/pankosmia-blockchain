@@ -116,12 +116,16 @@ class Blockchain():
     def returnTrustedBlock(self):
         return self.resolved
     def saveBlockchain(self, path):
+        #dictionary storing encoded blocks
         persist_blockchain = b64EncodeDictionary({block_hash: block.saveBlock() for block_hash, block in self.blockchain.items()})
+        #save blockchain to file
         with open(path, "w") as fp:
             fp.write(persist_blockchain)
     def openBlockchain(self, persist_blockchain):
+        #reinstantiate blockchain object
         self.__init__(valid_size=self.valid_size)
         persist_blockchain = b64DecodeDictionary(persist_blockchain)
+        #loop through all blocks and add to the blockchain
         for block_hash, block_encoded in persist_blockchain.items():
             block = Block()
             block.openBlock(block_encoded, self.ledger)
@@ -194,17 +198,17 @@ class Block():
         return self.transactions
     def saveBlock(self):
         persist_transactions = {header: txn.persistTxn() for header, txn in self.transactions.items() }#persist all the transactions
-        persist = b64EncodeDictionary([self.block, persist_transactions])
+        persist = b64EncodeDictionary([self.block, persist_transactions])#encode the items
         return persist
     def openBlock(self, encoded, ledger):#get encoded data and convert to block information
-        persist = b64DecodeDictionary(encoded)#
+        persist = b64DecodeDictionary(encoded)#decode encoded data
         self.block, persist_transactions = persist
         transactions = {}
-        for header, txn_data in persist_transactions.items():
-            txn = wallet.NodeTransaction(None, None, None, isempty=True)
-            txn.openTxn(txn_data, ledger)
+        for header, txn_data in persist_transactions.items():#loop through all transctions 
+            txn = wallet.NodeTransaction(None, None, None, isempty=True)#instantiate empty transaction
+            txn.openTxn(txn_data, ledger)#insert transaction data
             assert int(header) == txn.getSignature(), "Signature and Header mismatch"
-            transactions[header] = txn
+            transactions[header] = txn#edit block information
         self.transactions = transactions
 class TransactionLedger():
     'Ledger of all trusted transactions for lookup'
@@ -327,10 +331,4 @@ def test2_chain():
     print("Miner User Balance - {0}".format(mineruser.getBalance()))
     print("User1 Balance - {0}".format(user1.getBalance()))
     print("User2 Balance - {0}".format(user2.getBalance()))
-
-    
-    
-
-
-
 

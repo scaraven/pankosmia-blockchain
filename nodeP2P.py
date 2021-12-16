@@ -1,27 +1,37 @@
 #!/usr/bin/env python3
+"""import all the necessary libraries"""
 import argparse
 import atexit
 from basicNode import *
 from blockchain import *
 import os
+import time
 
 
 known_port = 9001
 known_host = "127.0.0.1"
 
 class P2PNode(BasicNode):
-    """This class builds upon the BasicNode class and is specialised to perform any task that a node can perform including receiving and verifying blocks (although this is done in the Blockchain class), Transmitting blocks and transactions.
+    """This class builds upon the BasicNode class 
+    and is specialised to perform any task that a node can perform including receiving and verifying blocks 
+    (although this is done in the Blockchain class), Transmitting blocks and transactions.
     """
     def __init__(self, host, port, known_host, known_port, isknown=False, blockchain=None, verify=False):
+        #call basicNode constructor
         super(P2PNode, self).__init__(host, port, known_host, known_port, "NODE", isknown=isknown)
 
+        #set blockchain
         self.blockchain = blockchain
+        #run exit_handler() function just before the script exits
         atexit.register(exit_handler, self)
+        #if we are not the lookup node run the following block
         if not isknown:
             self.startup()
+            #if we do not have a blockchain
             if self.blockchain == None:
                 time.sleep(1)
                 thread_client = self.connect_with_node(known_host, known_port)
+                #request blockchain from 
                 blockchain = self.requestBlockchain(thread_client)
                 self.disconnect_with_node(thread_client)
                 if blockchain != None:
@@ -84,10 +94,12 @@ class P2PNode(BasicNode):
                 user_key = b64DecodeDictionary(response["USER"])
                 balance = self.blockchain.ledger.getBalance(user_key)
                 data = {**self.protocol, "BALANCE": balance}
+                time.sleep(0.5)
                 self.send_to_node(connected_node, data)
     def node_message(self, connected_node, data):
         super(P2PNode, self).node_message(connected_node, data)
         if self.checkProtocol(connected_node, data):
+            self.transmitBalance(connected_node, data)
             self.respondBlockchain(connected_node, data)
             if isinstance(self.blockchain, Blockchain):
                 block = self.receiveBlock(connected_node, data, self.blockchain.getBlockChain().keys())
@@ -98,7 +110,9 @@ def exit_handler(node):
     if isinstance(node, P2PNode) and node.blockchain != None:
         hasher = hashlib.md5()
         hasher.update(bytes(node.id, encoding="ascii"))
-        path = hasher.digest().hex() + ".blkch"
+        if not os.path.isdir("./blockchain/"):
+            os.mkdir("blockchain")
+        path = os.path.join("blockchain", hasher.digest().hex() + ".blkch")
         print("[*] Saving blockchain to {0}".format(path))
         node.blockchain.saveBlockchain(path)
 if __name__ == "__main__":

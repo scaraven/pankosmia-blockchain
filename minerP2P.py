@@ -56,13 +56,13 @@ class MinerP2P(BasicNode):
                 for transaction_hash, transaction_info in transactions.items():#loop through transactions and remove them
                     self.removeTxn(transaction_hash)
         self.connected_node.busy = False
-    def mineBlock(self):#TODO!
+    def mineBlock(self):
         while True:
             if len(self.pool.pool.keys()) >= 10:
                 prevHash = self.getLastBlock()
                 block = Block(prevHash=prevHash)
                 breakpoint()
-                for transaction in self.pool.sortTxn()[:10]: #get 10 last transactions
+                for transaction in self.pool.sortTxn()[:10]: #get 10 most profitable transactions
                     block.addTransaction(transaction)
                     self.pool.removeTxn(transaction[0])
                 miner = Miner(block, self.minerwallet)

@@ -5,6 +5,7 @@ from collections import Counter
 from wallet import *
 import argparse
 import os
+import time
 
 known_host = '127.0.0.1'
 known_port = 9001
@@ -15,6 +16,8 @@ class UserP2P(BasicNode):
     def __init__(self, host, port, known_host, known_port, userwallet):
         super(UserP2P, self).__init__(host, port, known_host, known_port, "USER")
         self.user = userwallet
+        self.fetchingBalance = False
+        self.cnt = Counter()
     def createTransaction(self, receiver, amount, fee):#create a transaction and trasmit it
         transaction = UserTransaction(self.user.getPublic(), receiver, amount, fee, self.user.signTransaction)
         for host, port in self.known_nodes.items():
@@ -24,7 +27,10 @@ class UserP2P(BasicNode):
     def getBalance(self):#gets balance from remote nodes
         cnt = Counter()
         data = {**self.protocol, "REQUEST":"BALANCE", "USER":b64EncodeDictionary(self.user.getPublic())}
-        for host, port in self.known_nodes():#loop through all known nodes
+        for host, port in self.known_nodes.items():#loop through all known nodes
+            connected_node = self.connect_with_node(host, port)
+            connected_node.busy = True
+            self.send_to_node(connected_node, data)
             response = self.getResponse(connected_node)
             balance = response["BALANCE"]
             if balance is not None:
@@ -38,8 +44,9 @@ if __name__ == "__main__":
     parser.add_argument("--receiver", help="Receiver wallet - exponential:modulus", dest="receiver")
     parser.add_argument("--fee", help="Fee for miners", type=float, dest="fee")
     parser.add_argument("--new", help="Create New Wallet", default=False, dest="new", action="store_true")
+    parser.add_argument("--balance", help="Get balance from Wallet", default=False, dest="balance", action="store_true")
     conf = vars(parser.parse_args())
-    amount, path, new, receiver, fee = conf["amount"], conf["path"], conf["new"], conf["receiver"], conf["fee"]
+    amount, path, new, receiver, fee, balance = conf["amount"], conf["path"], conf["new"], conf["receiver"], conf["fee"], conf["balance"]
     wallet = Wallet()
     if new:
         write_path = input("Default path: ~/.pksa/pksa_rsa.pem")
@@ -48,7 +55,10 @@ if __name__ == "__main__":
         wallet.storeKey(write_path)
     else:
         wallet.openKey(path)
-    if amount is not None and receiver is not None and fee is not None:
+    if balance:
+        node = UserP2P('127.0.0.1', 8999, known_host, known_port, wallet)
+        print("[*] User Balance: {0}".format(node.getBalance()))
+    elif amount is not None and receiver is not None and fee is not None:
         receiver = tuple(int(comp) for comp in receiver.split(":"))
         node = UserP2P('127.0.0.1', 8999, known_host, known_port, wallet)
         node.createTransaction(receiver, amount, fee)
