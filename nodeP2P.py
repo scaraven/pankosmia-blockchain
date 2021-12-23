@@ -80,6 +80,7 @@ class P2PNode(BasicNode):
         for host, port in self.known_nodes.items():
             thread_client = self.connect_with_node(host, port)
             function(thread_client, *args)
+            self.disconnect_with_node(thread_client)
     def distTxn(self, txn):#distribute transaction to all known nodes
         if txn is not None:
             self.loopList(self.transmitTransaction, *(txn,))
@@ -88,45 +89,65 @@ class P2PNode(BasicNode):
             self.blockchain.addBlock(block)
             self.loopList(self.transmitBlock, *(block,))
     def transmitBalance(self, connected_node, response):
+        #check that the client is asking for a balance
         if "REQUEST" in response.keys() and response["REQUEST"] == "BALANCE":
+            #find user entry
             if "USER" in response.keys():
                 #tuple
                 user_key = b64DecodeDictionary(response["USER"])
+                #extract balance and send response
                 balance = self.blockchain.ledger.getBalance(user_key)
                 data = {**self.protocol, "BALANCE": balance}
                 time.sleep(0.5)
                 self.send_to_node(connected_node, data)
+    def returnLastBlock(self, connected_node, response):
+        #check response
+        if "GET" in response.keys() and response["GET"] == "LAST_BLOCK_HASH":
+            #retreive the last block
+            last_block_hash = blockchain.returnLastBlockHash()
+            #send the hash of the last block
+            data = {**self.protocol, "LAST_BLOCK_HASH":last_block_hash}
+            self.send_to_node(connected_node, data)
     def node_message(self, connected_node, data):
+        #call node_message in BasicNode first
         super(P2PNode, self).node_message(connected_node, data)
         if self.checkProtocol(connected_node, data):
+            #run all node specific response functions
             self.transmitBalance(connected_node, data)
             self.respondBlockchain(connected_node, data)
+            
+            #if our blockchain is not empty
             if isinstance(self.blockchain, Blockchain):
+                #we can also receive transactions and blocks
+                self.returnLastBlock(connected_node, data)
                 block = self.receiveBlock(connected_node, data, self.blockchain.getBlockChain().keys())
                 txn = self.receiveTransaction(connected_node, data, self.blockchain.ledger.pool)
                 self.distBlock(block)
         connected_node.busy = False
-def exit_handler(node):
-    if isinstance(node, P2PNode) and node.blockchain != None:
+def exit_handler(node):#run when the script exits
+    if isinstance(node, P2PNode) and node.blockchain != None:#if we have run a node
         hasher = hashlib.md5()
-        hasher.update(bytes(node.id, encoding="ascii"))
+        hasher.update(bytes(node.id, encoding="ascii"))#hash the node identifier
         if not os.path.isdir("./blockchain/"):
             os.mkdir("blockchain")
-        path = os.path.join("blockchain", hasher.digest().hex() + ".blkch")
+        path = os.path.join("blockchain", hasher.digest().hex() + ".blkch")#construct blockchain path
         print("[*] Saving blockchain to {0}".format(path))
-        node.blockchain.saveBlockchain(path)
+        node.blockchain.saveBlockchain(path)#save the blockchain at the specified path
 if __name__ == "__main__":
-
+    #Script arguments
     parser = argparse.ArgumentParser(description="Node Client Script")
     parser.add_argument("host", help="IP to listen on", default="127.0.0.1")
     parser.add_argument("port", help="port to listen on", default=9000)
     parser.add_argument("-b", help="Blockchain blk file", dest="blockpath", default=None)
     conf = vars(parser.parse_args())
     blockchain = None
+    #extract arguments
     blockpath, port, host = conf["blockpath"], int(conf["port"]), conf["host"]
+    #if we have passed a path to a blockchain file
     if blockpath != None and os.path.isfile(blockpath):
         blockchain = Blockchain()
         with open(blockpath, "r") as fp:
+            #open the blockchain
             blockchain.openBlockchain(fp.read())
 
     isknown = False
@@ -135,4 +156,6 @@ if __name__ == "__main__":
         if blockchain == None:
             blockchain = Blockchain()
     node = P2PNode(host, port, known_host, known_port, isknown=isknown, blockchain=blockchain) #The last two args should be a node which is always up
+    node.debug = True
     node.start()
+

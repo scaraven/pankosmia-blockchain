@@ -2,6 +2,7 @@
 from p2pnetwork.node import NodeConnection
 import time
 import socket
+import threading
 
 class CustomNodeConnection(NodeConnection):
     def __init__(self, main_node, sock, id, host, port):
@@ -52,6 +53,7 @@ class CustomNodeConnection(NodeConnection):
                     self.main_node.node_message( self, self.parse_packet(packet) )
                     self.content = None
                 else:
-                    self.content = self.parse_packet(packet)
+                    with threading.Lock():
+                        self.content = self.parse_packet(packet)
                 eot_pos = self.buffer.find(self.EOT_CHAR)
 

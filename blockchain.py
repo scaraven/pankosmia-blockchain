@@ -107,6 +107,41 @@ class Blockchain():
                 self.removeChain(child_block_hash)#recursively remove each branch
         del self.blockchain[block_hash]#finally delete the root
         del self.children[block_hash]
+    def returnLastBlockHash(self):
+        #retrieve the most recent block hash
+        if len(list(self.blockchain.keys())) == 0:
+            return "0"*64
+        block_hash = list(self.blockchain.keys())[-1]
+        #loop to the most recent resolved block
+        while block_hash not in self.resolved and block_hash != "0"*64:
+            block = self.blockchain[block_hash]
+            block_hash = block.getBlock()["prevHash"]
+        """we now need to find the longest chain
+            we know that the longest chain will be of length self.valid_size max
+        """
+        counter = 0
+        lastBlock = self.exploreChain(block_hash, counter)
+        #sort blocks in order of descending depth
+        lastBlock.sort(reverse=True, key=lambda x:x[0])
+        #return first block in the list
+        return lastBlock[0][1].getHash()
+    def exploreChain(self, block_hash, counter):
+        """returns all leaf children block objects given the hash of the root block in the sub-tree
+            if there are no children then returns an empty list
+        """
+        #get children of current block
+        children = self.children[block_hash]
+        #we have gone one level deeper into the chain so increase counter
+        counter += 1
+        #if there are no children then we are finished
+        if len(children) == 0:
+            return [(counter, self.blockchain[block_hash])]
+        else:
+            total = list()
+            #otherwise recursively drop down one level lower
+            for child in children:
+                total = total + self.exploreChain(child, counter)
+            return total
 
     #Getters and Setters
     def getBlock(self, block_hash):

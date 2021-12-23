@@ -6,6 +6,7 @@ import socket
 from p2pnetwork.node import Node
 import base64
 import json
+import time
 
 import threading
 
@@ -13,6 +14,7 @@ class BasicNode(Node):
     """A Basic Class which deals with fundemental protocols that any user on the Blockchain P2P Network should be able to perform
     This includes initiating Handshakes and retrieving lists of known endpoints. This class be built upon to specialise to either node, miner or user tasks"""
     def __init__(self, host, port, known_host, known_port, TYPE, isknown=False, id=None, callback=None, max_connections=6):
+        assert isinstance(port, int) and isinstance(known_port, int), "Port and Known Port must be of type int"
         id = port#TEMPORARY
         super(BasicNode, self).__init__(host, port, id, callback, max_connections)
         self.host = host
@@ -122,18 +124,17 @@ class BasicNode(Node):
             print("Found content")#debug message
             return content
         else:#sometimes the content does not arrive straight away
-            print("Listening for content")
             with threading.Lock():
                 connected_node.listen()#if our connection did not pick up the message automatically then listen for it ourselves
-            print("Listened for a while")
             content = self.getContent(connected_node)#fetch content
             if content != None:
                 return content
-        raise TimeoutError("Could not get response")#if we did not receive anything, raise an error
+        return None
+        #raise TimeoutError("Could not get response")#if we did not receive anything, raise an error
     def getContent(self, connected_node):
         content = connected_node.content#read content from buffer
         if content != None:#if the buffer is not empty
-            print("response_message from {0}: {1}".format(connected_node.id, content))#output debug message
+            print("response_message from {0}: {1} @ {2}".format(connected_node.id, content, time.time()))#output debug message
             connected_node.content = None#empty buffer
             return content
         return None#return nothing
@@ -144,7 +145,7 @@ class BasicNode(Node):
         response = self.getResponse(connected_node)
         if "TRANSMIT_BLOCK" in response.keys() and response["TRANSMIT_BLOCK"] == "NONE":#If the connected node does not have that block, send the full block
             block_data = {**self.protocol, "TRANSMIT_BLOCK": b64EncodeDictionary(block.getBlock()), "TRANSMIT_TRANSACTIONS": b64EncodeDictionary(block.transactions)}
-
+            self.send_to_node(connected_node, block_data)
         connected_node.busy = False
     def receiveBlock(self, connected_node, response, blockchain_keys):#MINER and NODE
         connected_node.busy = True
@@ -194,16 +195,16 @@ class BasicNode(Node):
         connected_node.busy = False
 
     def node_message(self, connected_node, data):
-        print("node_message from " + connected_node.id + ": " + str(data))
+        print("node_message from " + connected_node.id + ": " + str(data) + " @ " + str(time.time()))
         if self.checkProtocol(connected_node, data):#check protocl
             self.receiveHandshake(connected_node, data)#check whether we have a handshake
             self.receiveIPList(connected_node, data)#check whether a node is request the IPList
     def outbound_node_connected(self, connected_node):#we -> node
-        print("outbound_node_connected: " + connected_node.id)
+        print("outbound_node_connected: " + connected_node.id + " @ "+ str(time.time()))
     def inbound_node_connected(self, connected_node):#we <- node
-        print("inbound_node_connected: " + connected_node.id)
+        print("inbound_node_connected: " + connected_node.id + " @ "+ str(time.time()))
     def inbound_node_disconnected(self, connected_node):#we !<- node
-        print("inbound_node_disconnected: " + connected_node.id)
+        print("inbound_node_disconnected: " + connected_node.id + " @ "+ str(time.time()))
 
     def outbound_node_disconnected(self, connected_node):#we ->! node
         print("outbound_node_disconnected: " + connected_node.id)
@@ -211,6 +212,9 @@ class BasicNode(Node):
         super(BasicNode, self).send_to_node(connected_node, data)
     def create_new_connection(self, connection, id, host, port):
         return CustomNodeConnection(self, connection, id, host, port)
+    def send_to_node(self, n, data):
+        time.sleep(0.05)
+        super(BasicNode, self).send_to_node(n, data)
     #Modified from source code
     def connect_with_node(self, host, port, reconnect=False):
         """ Make a connection with another node that is running on host with port. When the connection is made, 
@@ -231,7 +235,9 @@ class BasicNode(Node):
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.debug_print("connecting to %s port %s" % (host, port))
+            sock.settimeout(60)
             sock.connect((host, port))
+            sock.settimeout(None)
 
             # Basic information exchange (not secure) of the id's of the nodes!
             sock.send(self.id.encode('utf-8')) # Send my id to the connected node!
