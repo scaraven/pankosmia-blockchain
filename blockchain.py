@@ -10,7 +10,7 @@ from miner import Miner
 
 class Blockchain():
     'Basic Blockchain class'
-    def __init__(self, valid_size=5):
+    def __init__(self, valid_size=1):
         #This decides how many blocks needed to be added to resolve a conflict
         self.valid_size = valid_size
 
@@ -84,16 +84,17 @@ class Blockchain():
     def updateLedger(self, pointer):
         if pointer != "0"*64:#make sure the pointer is not the genesisBlcok
             block = self.blockchain[pointer]
-            for transaction in block.getTransactions().values():#loop through all transactions
+            for signature, transaction in block.getTransactions().items():#loop through all transactions
                 self.ledger.addTransaction(transaction)#add transaction to ledger
         self.ledger.rewardMiner(block)#finally reward the miner for their work
     def verifyTransactions(self, pointer):#prevent transaction smuggling
         #block of type Block Class
         block = self.blockchain[pointer]
         transactions = block.transactions
-        for transaction_hash, transaction in transactions.items():
-            sender = transaction.info["sender"]
-            self.ledger.addTransaction(transaction)#THIS IS WRONG?
+        for signature, transaction in transactions.items():
+            info = transaction.getInfo()
+            sender = info["sender"]
+            self.ledger.addTransaction(transaction)
             if self.ledger.getBalance(sender) < 0.0:
                 self.ledger.removeTransaction(transaction)
                 return False
@@ -216,6 +217,7 @@ class Block():
         else:
             return False
     #Getters and Setters
+
     def getBlock(self):
         return self.block
     def setPoW(self, proof):
@@ -255,7 +257,6 @@ class TransactionLedger():
         #set: transaction_hashes
         self.pool = set()
     def addTransaction(self, transaction):
-        #breakpoint()
         info = transaction.getInfo()
         id_sender = self.computeHash(info["sender"])
         id_receiver = self.computeHash(info["receiver"])

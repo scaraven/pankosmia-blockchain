@@ -7,13 +7,12 @@ from p2pnetwork.node import Node
 import base64
 import json
 import time
-
 import threading
 
 class BasicNode(Node):
     """A Basic Class which deals with fundemental protocols that any user on the Blockchain P2P Network should be able to perform
     This includes initiating Handshakes and retrieving lists of known endpoints. This class be built upon to specialise to either node, miner or user tasks"""
-    def __init__(self, host, port, known_host, known_port, TYPE, isknown=False, id=None, callback=None, max_connections=6):
+    def __init__(self, host, port, known_host, known_port, TYPE, isknown=False, id=None, callback=None, max_connections=1000):
         assert isinstance(port, int) and isinstance(known_port, int), "Port and Known Port must be of type int"
         id = port#TEMPORARY
         super(BasicNode, self).__init__(host, port, id, callback, max_connections)
@@ -62,13 +61,10 @@ class BasicNode(Node):
             print("Received IP list - {0}".format(iplist))
             self.known_nodes.update(iplist) #update our IPLIST <<---- THIS IS VULNERABLE TO UNAUTHORISED DATA MODIFICATION
             return iplist
-        connected_node.busy = False
     def receiveIPList(self, connected_node, response): #Server side
-        connected_node.busy = True
         if "REQUEST" in response.keys() and response["REQUEST"] == "IPLIST":
             validation = {**self.protocol, "IPLIST": b64EncodeDictionary(self.known_nodes)}
             self.send_to_node(connected_node, validation) #Send our validation
-        connected_node.busy = False
     def transmitHandshake(self, connected_node, first=True): #A command which connects to a new IP and starts a handshake
         connected_node.busy = True
         data = {**self.protocol, "VERIFY":"TYPE", "FIRST":first} #ask node to verify that it is a node
@@ -81,7 +77,6 @@ class BasicNode(Node):
                     self.known_nodes[host] = port #update our known nodes
         self.transmitOKMessage(connected_node)#send OK message to acknowledge communication has finished
         ok = self.receiveOKMessage(connected_node)
-        connected_node.busy = False
         if ok != True:#If we do not get a OK message in return then the outboud node wants to start another protocol
             self.node_message(connected_node, ok)#run the correct protocol
     def receiveHandshake(self, connected_node, response): #Server side
@@ -98,12 +93,11 @@ class BasicNode(Node):
                 self.transmitOKMessage(connected_node)#otherwise acknowledge response and exit
         connected_node.busy = False
     def transmitOKMessage(self, connected_node):#transmitting an OK message means the end of communication
+        connected_node.busy = True
         data = {**self.protocol, "MESSAGE":"OK"}#craft data
         self.send_to_node(connected_node, data)#send data
     def receiveOKMessage(self, connected_node):#this should not be run inside node_message
-        connected_node.busy = True
         response = self.getResponse(connected_node)#get response
-        connected_node.busy = False
         if self.checkProtocol(connected_node, response):
             if response.pop("MESSAGE", None) == "OK":
                 return True#check whether we have received a standard OK Message
@@ -119,18 +113,25 @@ class BasicNode(Node):
             return False
     
     def getResponse(self, connected_node):
-        content = self.getContent(connected_node)#read content from buffer
-        if content != None:
-            print("Found content")#debug message
-            return content
-        else:#sometimes the content does not arrive straight away
-            with threading.Lock():
-                connected_node.listen()#if our connection did not pick up the message automatically then listen for it ourselves
-            content = self.getContent(connected_node)#fetch content
-            if content != None:
+        currentTime = time.time()
+        while time.time() - currentTime < 60.0:
+            chunk = b''
+            try:
+                chunk = connected_node.sock.recv(16384)
+            except socket.timeout:
+                connected_node.main_node.debug_print("NodeConnection: timeout")
+
+            except Exception as e:
+                connected_node.terminate_flag.set() # Exception occurred terminating the connection
+            if chunk != b'':
+                eot_pos = chunk.find(connected_node.EOT_CHAR)
+
+                packet = chunk[:eot_pos]
+
+                content = connected_node.parse_packet(packet)
+                print("response_message from {0}: {1} @ {2}".format(connected_node.id, content, time.time()))#output debug message
                 return content
-        return None
-        #raise TimeoutError("Could not get response")#if we did not receive anything, raise an error
+        raise TimeoutError("Response took too long to receive")
     def getContent(self, connected_node):
         content = connected_node.content#read content from buffer
         if content != None:#if the buffer is not empty
@@ -141,13 +142,23 @@ class BasicNode(Node):
     def transmitBlock(self, connected_node, block):#Transmits an individual block NODE AND MINER
         connected_node.busy = True
         data = {**self.protocol, "TRANSMIT_BLOCK":"HASH "+str(block.getHash())}#Send hash of block
+        #connected_node.send(data)
         self.send_to_node(connected_node, data)
         response = self.getResponse(connected_node)
         if "TRANSMIT_BLOCK" in response.keys() and response["TRANSMIT_BLOCK"] == "NONE":#If the connected node does not have that block, send the full block
-            block_data = {**self.protocol, "TRANSMIT_BLOCK": b64EncodeDictionary(block.getBlock()), "TRANSMIT_TRANSACTIONS": b64EncodeDictionary(block.transactions)}
+            block_data = {
+                    **self.protocol,
+                    "TRANSMIT_BLOCK": b64EncodeDictionary(block.getBlock()),
+                    "TRANSMIT_TRANSACTIONS": b64EncodeDictionary(self._convertTransactionsToDict(block.transactions))
+                    }
             self.send_to_node(connected_node, block_data)
-        connected_node.busy = False
-    def receiveBlock(self, connected_node, response, blockchain_keys):#MINER and NODE
+    def _convertTransactionsToDict(self, transactions):
+        temp = {}
+        for signature, txn_object in transactions.items():
+            temp[signature] = txn_object.getInfo()
+        return temp
+
+    def receiveBlock(self, connected_node, response, blockchain_keys, ledger):#MINER and NODE
         connected_node.busy = True
         if "TRANSMIT_BLOCK" in response.keys():
             hash = response["TRANSMIT_BLOCK"].lstrip("HASH ")#Parse response and extract block hash
@@ -158,17 +169,28 @@ class BasicNode(Node):
                 validation = {**self.protocol, "TRANSMIT_BLOCK": "NONE"}#We do not have the block, send the block to us
                 self.send_to_node(connected_node, validation)
                 response = self.getResponse(connected_node)
-                block_info = b64DecodeDictionary(response["TRANSMIT_BLOCK"])#decode all the block information
-                transaction_info = b64DecodeDictionary(response["TRANSMIT_TRANSACTIONS"])
-                block = Block()#create a new block
-                block.block = block_info
-                block.transactions = transaction_info
-                if block.verifyPoW() and block.verifyHeader():#verify block information
-                    return block#return block
+                block = self._convertResponseToBlock(response, ledger)
+                return block
         connected_node.busy = False
+    def _convertResponseToBlock(self, response, ledger):
+        block_info = b64DecodeDictionary(response["TRANSMIT_BLOCK"])#decode all the block information
+        transaction_info = b64DecodeDictionary(response["TRANSMIT_TRANSACTIONS"])
+        block = Block()#create a new block
+        block.block = block_info
+        block.transactions = self._convertTransctionDictToObject(transaction_info, ledger)
+        if block.verifyPoW() and block.verifyHeader():#verify block information
+            return block#return block
+    #converts a dictionary of transactions into objects
+    def _convertTransctionDictToObject(self, transaction_info, ledger):
+        temp = {}
+        for signature, info in transaction_info.items():
+            signature = int(signature)
+            temp[signature] = NodeTransaction(info, signature, ledger)
+        return temp
+
     def transmitTransaction(self, connected_node, transaction): #USER AND NODE
         connected_node.busy = True
-        data = {**self.protocol, "TRANSMIT_TRANSACTION": "HASH "+str(transaction.getSignature())}#send transaction hash to node
+        data = {**self.protocol, "TRANSMIT_TRANSACTION": "HASH "+str(transaction.hash)}#send transaction hash to node
         self.send_to_node(connected_node, data)
         response = self.getResponse(connected_node)#get response
         if "TRANSMIT_TRANSACTION" in response.keys() and response["TRANSMIT_TRANSACTION"] == "NONE":#check whether we should send full transaction data
@@ -178,28 +200,38 @@ class BasicNode(Node):
     def receiveTransaction(self, connected_node, response, pool):#MINER AND NODE
         connected_node.busy = True
         if "TRANSMIT_TRANSACTION" in response.keys():#check is response is correct
-            hash = response["TRANSMIT_TRANSACTION"].lstrip("HASH ")#extract hash
-            if hash in pool:#check whether transaction has already been stored
+            txn_hash = int(response["TRANSMIT_TRANSACTION"].lstrip("HASH "))#extract hash
+            if txn_hash in pool:#check whether transaction has already been stored
                 validation = {**self.protocol, "TRANSMIT_TRANSACTION": "EXISTS"}#craft response
                 self.send_to_node(connected_node, validation)
             else:
                 validation = {**self.protocol, "TRANSMIT_TRANSACTION": "NONE"}#ask for full transaction
                 self.send_to_node(connected_node, validation)
                 response = self.getResponse(connected_node)
-                transaction_info = b64DecodeDictionary(response["INFO"])
-                signature = response["SIGNATURE"]
-                transaction = NodeTransaction(transaction_info, signature, self.blockchain.ledger)
-                if transaction.verifyTransaction() and transaction.verifyHeader() and hash == transaction.hash:
-                    pool.add(transaction.getSignature())#add the transaction to our pool
+                transaction = self._convertResponseToTransaction(response)
+                if transaction.verifyTransaction() and transaction.verifyHeader() and txn_hash == transaction.hash:
+                    pool.add(transaction)#add the transaction to our pool
                     return transaction
         connected_node.busy = False
-
+    def _convertResponseToTransaction(self, response):
+        transaction_info = b64DecodeDictionary(response["INFO"])
+        signature = int(response["SIGNATURE"])
+        if self.TYPE == "NODE":
+            transaction = NodeTransaction(transaction_info, signature, self.blockchain.ledger)
+        else:
+            temp = TransactionLedger()
+            sender_hash = temp.computeHash(transaction_info["sender"])
+            temp.ledger[sender_hash] = transaction_info["amount"] + transaction_info["fee"]
+            transaction = NodeTransaction(transaction_info, signature, temp)
+        return transaction
     def node_message(self, connected_node, data):
+        connected_node.busy = True
         print("node_message from " + connected_node.id + ": " + str(data) + " @ " + str(time.time()))
         if self.checkProtocol(connected_node, data):#check protocl
             self.receiveHandshake(connected_node, data)#check whether we have a handshake
             self.receiveIPList(connected_node, data)#check whether a node is request the IPList
     def outbound_node_connected(self, connected_node):#we -> node
+        print(connected_node.busy)
         print("outbound_node_connected: " + connected_node.id + " @ "+ str(time.time()))
     def inbound_node_connected(self, connected_node):#we <- node
         print("inbound_node_connected: " + connected_node.id + " @ "+ str(time.time()))
@@ -244,11 +276,10 @@ class BasicNode(Node):
             connected_node_id = sock.recv(4096).decode('utf-8') # When a node is connected, it sends it id!
 
             # Fix bug: Cannot connect with nodes that are already connected with us!
-            for node in self.nodes_inbound:
-                if node.host == host and node.id == connected_node_id:
+            #for node in self.nodes_inbound:
+                #if node.host == host and node.id == connected_node_id:
                     #print("connect_with_node: This node (" + node.id + ") is already connected with us.")
-                    self.disconnect_with_node(node)
-                    self.connect_with_node(host, port)
+             #       sock.close()
 
             thread_client = self.create_new_connection(sock, connected_node_id, host, port)
             thread_client.start()

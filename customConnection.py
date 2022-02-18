@@ -17,7 +17,7 @@ class CustomNodeConnection(NodeConnection):
         self.buffer = b''
         while not self.terminate_flag.is_set():
             self.listen()
-            time.sleep(0.01)
+            time.sleep(1)
 
         # IDEA: Invoke (event) a method in main_node so the user is able to send a bye message to the node before it is closed?
         self.sock.settimeout(None)
@@ -27,8 +27,10 @@ class CustomNodeConnection(NodeConnection):
     def listen(self):
         chunk = b''
         try:
+            self.terminate_flag.wait(0.1)
             #print("Inside listen(), listening for chunk - {0}".format(time.time()))
-            chunk = self.sock.recv(4096)
+            if not self.busy:
+                chunk = self.sock.recv(4096)
             #print("Received chunk from listen() - {0}".format(time.time()))
 
         except socket.timeout:
@@ -44,16 +46,11 @@ class CustomNodeConnection(NodeConnection):
             self.buffer += chunk
             eot_pos = self.buffer.find(self.EOT_CHAR)
 
-            while eot_pos > 0:
+            if eot_pos > 0:
                 packet = self.buffer[:eot_pos]
                 self.buffer = self.buffer[eot_pos + 1:]
 
                 self.main_node.message_count_recv += 1
-                if not self.busy:
-                    self.main_node.node_message( self, self.parse_packet(packet) )
-                    self.content = None
-                else:
-                    with threading.Lock():
-                        self.content = self.parse_packet(packet)
+                self.main_node.node_message( self, self.parse_packet(packet) )
                 eot_pos = self.buffer.find(self.EOT_CHAR)
 

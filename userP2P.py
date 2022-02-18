@@ -70,9 +70,13 @@ if __name__ == "__main__":
     if balance:
         #define a new node and get user balance
         node = UserP2P('127.0.0.1', 8999, known_host, known_port, wallet)
+        node.start()
         print("[*] User Balance: {0}".format(node.getBalance()))
     #otherwise, if the correct arguments are passed, create a new transaction
     elif amount is not None and receiver is not None and fee is not None:
         receiver = tuple(int(comp) for comp in receiver.split(":"))
         node = UserP2P('127.0.0.1', 8999, known_host, known_port, wallet)
+        node.start()
         node.createTransaction(receiver, amount, fee)
+    
+    node.terminate_flag.set()

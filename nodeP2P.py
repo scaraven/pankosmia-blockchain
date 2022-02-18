@@ -120,9 +120,10 @@ class P2PNode(BasicNode):
             if isinstance(self.blockchain, Blockchain):
                 #we can also receive transactions and blocks
                 self.returnLastBlock(connected_node, data)
-                block = self.receiveBlock(connected_node, data, self.blockchain.getBlockChain().keys())
+                block = self.receiveBlock(connected_node, data, self.blockchain.getBlockChain().keys(), self.blockchain.ledger)
                 txn = self.receiveTransaction(connected_node, data, self.blockchain.ledger.pool)
                 self.distBlock(block)
+                self.distTxn(txn)
         connected_node.busy = False
 def exit_handler(node):#run when the script exits
     if isinstance(node, P2PNode) and node.blockchain != None:#if we have run a node
@@ -156,6 +157,6 @@ if __name__ == "__main__":
         if blockchain == None:
             blockchain = Blockchain()
     node = P2PNode(host, port, known_host, known_port, isknown=isknown, blockchain=blockchain) #The last two args should be a node which is always up
-    node.debug = True
+    #node.debug = True
     node.start()
 
