@@ -26,7 +26,6 @@ class BasicNode(Node):
             self.known_nodes[known_host] = known_port
 
         #CONSTANTS
-        #assert TYPE in ["NODE", "MINER"], "Invalid Type for Basic Node"
         self.TYPE = TYPE
         self.protocol = {"PROTOCOL": "PSKA 0.2"}
         self.EOT_CHAR = 0x04.to_bytes(1, 'big')
@@ -114,31 +113,31 @@ class BasicNode(Node):
     
     def getResponse(self, connected_node):
         currentTime = time.time()
+        #repeat listening for 60 seconds
         while time.time() - currentTime < 60.0:
             chunk = b''
             try:
+                #receive messages
                 chunk = connected_node.sock.recv(16384)
             except socket.timeout:
+                #if the socket timesout then give out an error
                 connected_node.main_node.debug_print("NodeConnection: timeout")
 
             except Exception as e:
                 connected_node.terminate_flag.set() # Exception occurred terminating the connection
+            #if we have received a message
             if chunk != b'':
+                #find the location where the message ends
                 eot_pos = chunk.find(connected_node.EOT_CHAR)
 
                 packet = chunk[:eot_pos]
 
+                #return the message
                 content = connected_node.parse_packet(packet)
                 print("response_message from {0}: {1} @ {2}".format(connected_node.id, content, time.time()))#output debug message
                 return content
+        #if it took over 60 seconds for a message to be received then raise an error
         raise TimeoutError("Response took too long to receive")
-    def getContent(self, connected_node):
-        content = connected_node.content#read content from buffer
-        if content != None:#if the buffer is not empty
-            print("response_message from {0}: {1} @ {2}".format(connected_node.id, content, time.time()))#output debug message
-            connected_node.content = None#empty buffer
-            return content
-        return None#return nothing
     def transmitBlock(self, connected_node, block):#Transmits an individual block NODE AND MINER
         connected_node.busy = True
         data = {**self.protocol, "TRANSMIT_BLOCK":"HASH "+str(block.getHash())}#Send hash of block
@@ -172,6 +171,8 @@ class BasicNode(Node):
                 block = self._convertResponseToBlock(response, ledger)
                 return block
         connected_node.busy = False
+
+    #converts a block sent over the network into a Block object
     def _convertResponseToBlock(self, response, ledger):
         block_info = b64DecodeDictionary(response["TRANSMIT_BLOCK"])#decode all the block information
         transaction_info = b64DecodeDictionary(response["TRANSMIT_TRANSACTIONS"])
@@ -183,8 +184,10 @@ class BasicNode(Node):
     #converts a dictionary of transactions into objects
     def _convertTransctionDictToObject(self, transaction_info, ledger):
         temp = {}
+        #loop through all transactions in dictionary
         for signature, info in transaction_info.items():
             signature = int(signature)
+            #convert dictionary information to object
             temp[signature] = NodeTransaction(info, signature, ledger)
         return temp
 
@@ -213,12 +216,18 @@ class BasicNode(Node):
                     pool.add(transaction)#add the transaction to our pool
                     return transaction
         connected_node.busy = False
+
+    #takes a transaction sent over a network and converts to an object
     def _convertResponseToTransaction(self, response):
+        #extract information and response 
         transaction_info = b64DecodeDictionary(response["INFO"])
         signature = int(response["SIGNATURE"])
+        #if this is being run by a node
         if self.TYPE == "NODE":
             transaction = NodeTransaction(transaction_info, signature, self.blockchain.ledger)
         else:
+            #if this is being run by a miner
+            #create a temporary ledger
             temp = TransactionLedger()
             sender_hash = temp.computeHash(transaction_info["sender"])
             temp.ledger[sender_hash] = transaction_info["amount"] + transaction_info["fee"]

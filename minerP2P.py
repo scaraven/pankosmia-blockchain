@@ -133,7 +133,7 @@ def startup():
     #create a new miner on port 1337
     miner = MinerP2P('127.0.0.1', 1337, known_host, known_port, minerwallet)
     miner.start()
-    x = threading.Thread(target=miner.mineBlock)
-    x.start()
+    mine_block_thread = threading.Thread(target=miner.mineBlock)
+    mine_block_thread.start()
 if __name__ == "__main__":
     startup()

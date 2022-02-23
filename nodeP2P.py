@@ -39,7 +39,7 @@ class P2PNode(BasicNode):
                 else:
                     raise ValueError("No valid blockchain found!")
         if verify:
-            if not verifyBlockchain(self.blockchain):
+            if not self.verifyBlockchain(self.blockchain):
                 raise ValueError("Invalid Blockchain")
     def startup(self): #run this automatically when class is initiated
         #Request IPlist from known node
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         isknown = True
         if blockchain == None:
             blockchain = Blockchain()
-    node = P2PNode(host, port, known_host, known_port, isknown=isknown, blockchain=blockchain) #The last two args should be a node which is always up
+    node = P2PNode(host, port, known_host, known_port, isknown=isknown, blockchain=blockchain, verify=True) #The last two args should be a node which is always up
     #node.debug = True
     node.start()
 

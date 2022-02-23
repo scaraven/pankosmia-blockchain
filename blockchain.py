@@ -181,7 +181,7 @@ class Block():
     def addTransaction(self, transaction):
         #Limit number of transactions per block
         if len(self.transactions) < self.limit:
-            if transaction.verifyTransaction() and transaction.preventOverSpending() and transaction.verifyHeader():
+            if transaction.verifyTransaction() and transaction.verifyHeader():
                 self.transactions[transaction.getSignature()] = transaction
                 self.block["transactions"] = list(self.transactions.keys())
     #Computes hash of own block
